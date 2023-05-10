@@ -10,9 +10,14 @@ const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
+const EPSILON: f32 = 0.00001; // should be smaller than surface distance
 const SURFACE_DISTANCE: f32 = 0.0001;
 const MAX_DISTANCE: f32 = 10.0;
 const MAX_STEPS: u32 = 100;
+
+const RED: Vec3 = vec3(1.0, 0.0, 0.0);
+const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
+const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
 
 /// Holds state needed for ray marcher
 struct Raymarcher {
@@ -23,9 +28,9 @@ struct Raymarcher {
 impl Raymarcher {
     fn new() -> Self {
         let spheres = vec![
-            Sphere::new(vec3(0.0, 0.0, 0.0), 1.0),
-            Sphere::new(vec3(1.0, 1.0, -2.0), 1.0),
-            Sphere::new(vec3(-1.0, -1.0, -0.5), 1.0),
+            Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, RED),
+            Sphere::new(vec3(1.0, 1.0, -2.0), 1.0, GREEN),
+            Sphere::new(vec3(-1.0, -1.0, -0.5), 1.0, BLUE),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         Self {
@@ -44,7 +49,7 @@ impl Callbacks for Raymarcher {
         self.draw(canvas);
 
         if ctx.input.keyboard.key_just_pressed(KeyCode::S) {
-            let path = "outputs/02.png";
+            let path = "outputs/04.png";
             canvas.export_screenshot(path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -73,30 +78,37 @@ impl Raymarcher {
                     FOCAL_LENGTH,
                 );
                 let dir = uv.normalize();
-                let result = self.raymarch(self.camera_pos, dir);
-                if let Some(d) = result {
-                    let scaled = d / MAX_DISTANCE;
-                    let color = &[scaled, scaled, scaled];
-                    canvas.write_pixel_f32(x, y, color);
-                }
+                let color = self.raymarch(self.camera_pos, dir);
+                canvas.write_pixel_f32(x, y, &color.to_array());
             }
         }
     }
 
-    fn raymarch(&self, ro: Vec3, rd: Vec3) -> Option<f32> {
+    fn raymarch(&self, ro: Vec3, rd: Vec3) -> Vec3 {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ro + rd * t;
             let dist = self.closest_sdf(pos);
+            if dist < SURFACE_DISTANCE {
+                let color = self.closest_color(pos);
+                let normal = self.normal(pos);
+                return normal;
+            }
+
             t += dist;
             if t > MAX_DISTANCE {
                 break;
             }
-            if dist < SURFACE_DISTANCE {
-                return Some(t);
-            }
         }
-        None
+        Vec3::ZERO
+    }
+
+    fn normal(&self, pos: Vec3) -> Vec3 {
+        let center = self.closest_sdf(pos);
+        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0));
+        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0));
+        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON));
+        (vec3(x, y, z) - center) / EPSILON
     }
 
     fn closest_sdf(&self, pos: Vec3) -> f32 {
@@ -109,6 +121,19 @@ impl Raymarcher {
         }
         closest
     }
+
+    fn closest_color(&self, pos: Vec3) -> Vec3 {
+        let mut closest_sphere = &self.spheres[0];
+        let mut closest_dist = std::f32::MAX;
+        for sphere in self.spheres.iter() {
+            let dist = sphere.sdf(pos);
+            if dist < closest_dist {
+                closest_sphere = sphere;
+                closest_dist = dist;
+            }
+        }
+        closest_sphere.color
+    }
 }
 
 fn main() {
@@ -120,14 +145,16 @@ fn main() {
 struct Sphere {
     pos: Vec3,
     radius: f32,
+    color: Vec3,
 }
 
 impl Sphere {
-    fn new(pos: Vec3, radius: f32) -> Self {
-        Self { pos, radius }
+    fn new(pos: Vec3, radius: f32, color: Vec3) -> Self {
+        Self { pos, radius, color }
     }
 
     fn sdf(&self, pos: Vec3) -> f32 {
         self.pos.distance(pos) - self.radius
     }
 }
+
