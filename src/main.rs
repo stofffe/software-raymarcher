@@ -1,4 +1,4 @@
-use glam::{vec3, Vec3};
+use glam::{vec3, vec4, Vec3, Vec4, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     canvas::Canvas,
@@ -88,14 +88,14 @@ impl Raymarcher {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ro + rd * t;
-            let dist = self.closest_sdf(pos);
-            if dist < SURFACE_DISTANCE {
-                let color = self.closest_color(pos);
+            let closest = self.closest_sdf(pos);
+            if closest.w < SURFACE_DISTANCE {
                 let normal = self.normal(pos);
+                let color = closest.xyz();
                 return normal;
             }
 
-            t += dist;
+            t += closest.w;
             if t > MAX_DISTANCE {
                 break;
             }
@@ -104,35 +104,22 @@ impl Raymarcher {
     }
 
     fn normal(&self, pos: Vec3) -> Vec3 {
-        let center = self.closest_sdf(pos);
-        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0));
-        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0));
-        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON));
+        let center = self.closest_sdf(pos).w;
+        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0)).w;
+        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0)).w;
+        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON)).w;
         (vec3(x, y, z) - center) / EPSILON
     }
 
-    fn closest_sdf(&self, pos: Vec3) -> f32 {
-        let mut closest = std::f32::MAX; // TODO option
+    fn closest_sdf(&self, pos: Vec3) -> Vec4 {
+        let mut closest = vec4(0.0, 0.0, 0.0, std::f32::MAX);
         for sphere in self.spheres.iter() {
             let dist = sphere.sdf(pos);
-            if dist < closest {
-                closest = dist;
+            if dist < closest.w {
+                closest = vec4(sphere.color.x, sphere.color.y, sphere.color.z, dist)
             }
         }
         closest
-    }
-
-    fn closest_color(&self, pos: Vec3) -> Vec3 {
-        let mut closest_sphere = &self.spheres[0];
-        let mut closest_dist = std::f32::MAX;
-        for sphere in self.spheres.iter() {
-            let dist = sphere.sdf(pos);
-            if dist < closest_dist {
-                closest_sphere = sphere;
-                closest_dist = dist;
-            }
-        }
-        closest_sphere.color
     }
 }
 
