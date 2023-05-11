@@ -1,9 +1,8 @@
 use glam::{vec3, vec4, Vec3, Vec4, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
-    canvas::Canvas,
-    context::Context,
-    input::KeyCode,
+    cmd::{canvas, keyboard, media},
+    Context, KeyCode,
 };
 
 const WIDTH: u32 = 512;
@@ -42,15 +41,13 @@ impl Raymarcher {
 
 impl Callbacks for Raymarcher {
     fn update(&mut self, ctx: &mut Context, _dt: f32) -> bool {
-        let canvas = &mut ctx.render.canvas;
+        canvas::clear_screen(ctx);
 
-        canvas.clear_screen();
+        self.draw(ctx);
 
-        self.draw(canvas);
-
-        if ctx.input.keyboard.key_just_pressed(KeyCode::S) {
+        if keyboard::key_just_pressed(ctx, KeyCode::S) {
             let path = "outputs/04.png";
-            canvas.export_screenshot(path).unwrap();
+            media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
 
@@ -68,9 +65,9 @@ impl Callbacks for Raymarcher {
 }
 
 impl Raymarcher {
-    fn draw(&self, canvas: &mut Canvas) {
-        for y in 0..canvas.height() {
-            for x in 0..canvas.width() {
+    fn draw(&self, ctx: &mut Context) {
+        for y in 0..canvas::height(ctx) {
+            for x in 0..canvas::width(ctx) {
                 // Get uv coordinates and direction
                 let uv = vec3(
                     x as f32 - WIDTH as f32 / 2.0,
@@ -79,7 +76,7 @@ impl Raymarcher {
                 );
                 let dir = uv.normalize();
                 let color = self.raymarch(self.camera_pos, dir);
-                canvas.write_pixel_f32(x, y, &color.to_array());
+                canvas::write_pixel_f32(ctx, x, y, &color.to_array());
             }
         }
     }
@@ -144,4 +141,3 @@ impl Sphere {
         self.pos.distance(pos) - self.radius
     }
 }
-
