@@ -20,20 +20,20 @@ const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
 
 /// Holds state needed for ray marcher
 struct Raymarcher {
-    spheres: Vec<Sphere>,
+    surfaces: Vec<Box<dyn Surface>>,
     camera_pos: Vec3,
 }
 
 impl Raymarcher {
     fn new() -> Self {
-        let spheres = vec![
-            Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, RED),
-            Sphere::new(vec3(1.0, 1.0, -2.0), 1.0, GREEN),
-            Sphere::new(vec3(-1.0, -1.0, -0.5), 1.0, BLUE),
+        let surfaces: Vec<Box<dyn Surface>> = vec![
+            Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, RED)),
+            Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0, GREEN)),
+            Box::new(Plane::new(vec3(0.0, -1.0, 0.0), -3.0, BLUE)),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         Self {
-            spheres,
+            surfaces,
             camera_pos,
         }
     }
@@ -110,10 +110,15 @@ impl Raymarcher {
 
     fn closest_sdf(&self, pos: Vec3) -> Vec4 {
         let mut closest = vec4(0.0, 0.0, 0.0, std::f32::MAX);
-        for sphere in self.spheres.iter() {
-            let dist = sphere.sdf(pos);
+        for surface in self.surfaces.iter() {
+            let dist = surface.sdf(pos);
             if dist < closest.w {
-                closest = vec4(sphere.color.x, sphere.color.y, sphere.color.z, dist)
+                closest = vec4(
+                    surface.color().x,
+                    surface.color().y,
+                    surface.color().z,
+                    dist,
+                )
             }
         }
         closest
@@ -125,7 +130,13 @@ fn main() {
     pixel_renderer::app::run(app)
 }
 
-// Distance functions
+/// Represents a surface defined by a SDF
+trait Surface {
+    fn sdf(&self, pos: Vec3) -> f32;
+    fn color(&self) -> Vec3;
+}
+
+// Surface representing a sphere defined by position and radius
 struct Sphere {
     pos: Vec3,
     radius: f32,
@@ -136,8 +147,43 @@ impl Sphere {
     fn new(pos: Vec3, radius: f32, color: Vec3) -> Self {
         Self { pos, radius, color }
     }
+}
 
+impl Surface for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
         self.pos.distance(pos) - self.radius
+    }
+
+    fn color(&self) -> Vec3 {
+        self.color
+    }
+}
+
+/// Surface representing a plane defined by a normal
+/// height defines distance moved along normal
+struct Plane {
+    normal: Vec3,
+    height: f32,
+    color: Vec3,
+}
+
+impl Plane {
+    fn new(normal: Vec3, height: f32, color: Vec3) -> Self {
+        let normal = normal.normalize();
+        Self {
+            normal,
+            height,
+            color,
+        }
+    }
+}
+
+impl Surface for Plane {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        pos.dot(self.normal) - self.height
+    }
+
+    fn color(&self) -> Vec3 {
+        self.color
     }
 }
