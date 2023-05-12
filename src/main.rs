@@ -20,20 +20,29 @@ const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
 
 /// Holds state needed for ray marcher
 struct Raymarcher {
-    surfaces: Vec<Box<dyn Surface>>,
+    objects: Vec<Object>,
     camera_pos: Vec3,
 }
 
 impl Raymarcher {
     fn new() -> Self {
-        let surfaces: Vec<Box<dyn Surface>> = vec![
-            Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, RED)),
-            Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0, GREEN)),
-            Box::new(Plane::new(vec3(0.0, -1.0, 0.0), -3.0, BLUE)),
+        let objects: Vec<Object> = vec![
+            Object::new(
+                Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0)),
+                Box::new(Flat::new(RED)),
+            ),
+            Object::new(
+                Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0)),
+                Box::new(Normal),
+            ),
+            Object::new(
+                Box::new(Plane::new(vec3(1.0, -1.0, 0.0), -2.0)),
+                Box::new(Flat::new(BLUE)),
+            ),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         Self {
-            surfaces,
+            objects,
             camera_pos,
         }
     }
@@ -46,7 +55,7 @@ impl Callbacks for Raymarcher {
         self.draw(ctx);
 
         if keyboard::key_just_pressed(ctx, KeyCode::S) {
-            let path = "outputs/04.png";
+            let path = "outputs/05.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -81,44 +90,65 @@ impl Raymarcher {
         }
     }
 
-    fn raymarch(&self, ro: Vec3, rd: Vec3) -> Vec3 {
+    fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Vec3 {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
-            let pos = ro + rd * t;
-            let closest = self.closest_sdf(pos);
-            if closest.w < SURFACE_DISTANCE {
-                let normal = self.normal(pos);
-                let color = closest.xyz();
-                return normal;
+            let pos = ray_origin + ray_dir * t;
+            let distance = self.closest_sdf(pos);
+            if distance < SURFACE_DISTANCE {
+                return self.hit(ray_dir, pos);
             }
 
-            t += closest.w;
-            if t > MAX_DISTANCE {
+            t += distance;
+            if t >= MAX_DISTANCE {
                 break;
             }
         }
+        self.miss()
+    }
+
+    fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
+        let info = self.hitinfo(pos);
+        let object = &self.objects[info.object_index];
+        let normal = self.normal(pos);
+        object.material.color(rd, pos, normal)
+    }
+
+    fn miss(&self) -> Vec3 {
         Vec3::ZERO
     }
 
     fn normal(&self, pos: Vec3) -> Vec3 {
-        let center = self.closest_sdf(pos).w;
-        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0)).w;
-        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0)).w;
-        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON)).w;
+        let center = self.hitinfo(pos).distance;
+        let x = self.hitinfo(pos - vec3(EPSILON, 0.0, 0.0)).distance;
+        let y = self.hitinfo(pos - vec3(0.0, EPSILON, 0.0)).distance;
+        let z = self.hitinfo(pos - vec3(0.0, 0.0, EPSILON)).distance;
         (vec3(x, y, z) - center) / EPSILON
     }
 
-    fn closest_sdf(&self, pos: Vec3) -> Vec4 {
-        let mut closest = vec4(0.0, 0.0, 0.0, std::f32::MAX);
-        for surface in self.surfaces.iter() {
-            let dist = surface.sdf(pos);
-            if dist < closest.w {
-                closest = vec4(
-                    surface.color().x,
-                    surface.color().y,
-                    surface.color().z,
-                    dist,
-                )
+    fn closest_sdf(&self, pos: Vec3) -> f32 {
+        let mut closest = MAX_DISTANCE;
+        for object in self.objects.iter() {
+            let dist = object.surface.sdf(pos);
+            if dist < closest {
+                closest = dist;
+            }
+        }
+        closest
+    }
+
+    fn hitinfo(&self, pos: Vec3) -> HitInfo {
+        let mut closest = HitInfo {
+            distance: MAX_DISTANCE,
+            object_index: 0,
+        };
+        for (i, object) in self.objects.iter().enumerate() {
+            let dist = object.surface.sdf(pos);
+            if dist < closest.distance {
+                closest = HitInfo {
+                    distance: dist,
+                    object_index: i,
+                };
             }
         }
         closest
@@ -130,32 +160,72 @@ fn main() {
     pixel_renderer::app::run(app)
 }
 
+struct HitInfo {
+    distance: f32,
+    object_index: usize,
+}
+
+struct Object {
+    surface: Box<dyn Surface>,
+    material: Box<dyn Material>,
+}
+
+impl Object {
+    fn new(surface: Box<dyn Surface>, material: Box<dyn Material>) -> Self {
+        Object { surface, material }
+    }
+}
+
+trait Material {
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3) -> Vec3;
+}
+
+/// Flat color not affected by light
+struct Flat {
+    color: Vec3,
+}
+
+impl Flat {
+    fn new(color: Vec3) -> Self {
+        Self { color }
+    }
+}
+
+impl Material for Flat {
+    fn color(&self, _ray: Vec3, _pos: Vec3, _normal: Vec3) -> Vec3 {
+        self.color
+    }
+}
+
+/// Material that outputs the normal as a color
+struct Normal;
+
+impl Material for Normal {
+    fn color(&self, _ray: Vec3, _pos: Vec3, normal: Vec3) -> Vec3 {
+        normal
+    }
+}
+
 /// Represents a surface defined by a SDF
 trait Surface {
     fn sdf(&self, pos: Vec3) -> f32;
-    fn color(&self) -> Vec3;
 }
 
 // Surface representing a sphere defined by position and radius
 struct Sphere {
     pos: Vec3,
     radius: f32,
-    color: Vec3,
 }
 
 impl Sphere {
-    fn new(pos: Vec3, radius: f32, color: Vec3) -> Self {
-        Self { pos, radius, color }
+    fn new(pos: Vec3, radius: f32) -> Self {
+        Self { pos, radius }
     }
 }
 
 impl Surface for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
         self.pos.distance(pos) - self.radius
-    }
-
-    fn color(&self) -> Vec3 {
-        self.color
     }
 }
 
@@ -164,26 +234,17 @@ impl Surface for Sphere {
 struct Plane {
     normal: Vec3,
     height: f32,
-    color: Vec3,
 }
 
 impl Plane {
-    fn new(normal: Vec3, height: f32, color: Vec3) -> Self {
+    fn new(normal: Vec3, height: f32) -> Self {
         let normal = normal.normalize();
-        Self {
-            normal,
-            height,
-            color,
-        }
+        Self { normal, height }
     }
 }
 
 impl Surface for Plane {
     fn sdf(&self, pos: Vec3) -> f32 {
         pos.dot(self.normal) - self.height
-    }
-
-    fn color(&self) -> Vec3 {
-        self.color
     }
 }
