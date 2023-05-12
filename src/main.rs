@@ -1,4 +1,4 @@
-use glam::{vec3, vec4, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec3, Vec3};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -18,10 +18,33 @@ const RED: Vec3 = vec3(1.0, 0.0, 0.0);
 const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
 const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
 
+const CAMERA_MOVE_SPEED: f32 = 2.0;
+const CAMERA_ROTATE_SPEED: f32 = 1.0;
+
 /// Holds state needed for ray marcher
 struct Raymarcher {
     objects: Vec<Object>,
     camera_pos: Vec3,
+}
+
+impl Callbacks for Raymarcher {
+    fn update(&mut self, ctx: &mut Context, dt: f32) -> bool {
+        // println!("{dt}");
+
+        self.input(ctx, dt);
+        self.draw(ctx);
+
+        false
+    }
+
+    fn config(&self) -> Config {
+        Config {
+            canvas_width: WIDTH,
+            canvas_height: HEIGHT,
+            resizeable: true,
+            ..Default::default()
+        }
+    }
 }
 
 impl Raymarcher {
@@ -46,35 +69,31 @@ impl Raymarcher {
             camera_pos,
         }
     }
-}
 
-impl Callbacks for Raymarcher {
-    fn update(&mut self, ctx: &mut Context, _dt: f32) -> bool {
-        canvas::clear_screen(ctx);
+    fn input(&mut self, ctx: &Context, dt: f32) {
+        if keyboard::key_pressed(ctx, KeyCode::W) {
+            self.camera_pos.z += CAMERA_MOVE_SPEED * dt;
+        }
+        if keyboard::key_pressed(ctx, KeyCode::S) {
+            self.camera_pos.z -= CAMERA_MOVE_SPEED * dt;
+        }
+        if keyboard::key_pressed(ctx, KeyCode::A) {
+            self.camera_pos.x -= CAMERA_MOVE_SPEED * dt;
+        }
+        if keyboard::key_pressed(ctx, KeyCode::D) {
+            self.camera_pos.x += CAMERA_MOVE_SPEED * dt;
+        }
 
-        self.draw(ctx);
-
-        if keyboard::key_just_pressed(ctx, KeyCode::S) {
+        if keyboard::key_just_pressed(ctx, KeyCode::Space) {
             let path = "outputs/05.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
-
-        false
     }
 
-    fn config(&self) -> Config {
-        Config {
-            canvas_width: WIDTH,
-            canvas_height: HEIGHT,
-            resizeable: true,
-            ..Default::default()
-        }
-    }
-}
-
-impl Raymarcher {
     fn draw(&self, ctx: &mut Context) {
+        canvas::clear_screen(ctx);
+
         for y in 0..canvas::height(ctx) {
             for x in 0..canvas::width(ctx) {
                 // Get uv coordinates and direction
