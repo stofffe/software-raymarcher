@@ -1,4 +1,4 @@
-use glam::{vec3, Vec3};
+use glam::{vec3, Mat3, Vec3};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -25,6 +25,7 @@ const CAMERA_ROTATE_SPEED: f32 = 1.0;
 struct Raymarcher {
     objects: Vec<Object>,
     camera_pos: Vec3,
+    camera_rot: f32,
 }
 
 impl Callbacks for Raymarcher {
@@ -64,24 +65,39 @@ impl Raymarcher {
             ),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
+        let camera_rot = 0.0;
         Self {
             objects,
             camera_pos,
+            camera_rot,
         }
     }
 
     fn input(&mut self, ctx: &Context, dt: f32) {
+        let rot_mat = Mat3::from_rotation_y(self.camera_rot);
+        let rot_mat = rot_mat.to_cols_array_2d();
+        let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
+        let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
+        let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
+
         if keyboard::key_pressed(ctx, KeyCode::W) {
-            self.camera_pos.z += CAMERA_MOVE_SPEED * dt;
+            self.camera_pos += forward * CAMERA_MOVE_SPEED * dt;
         }
         if keyboard::key_pressed(ctx, KeyCode::S) {
-            self.camera_pos.z -= CAMERA_MOVE_SPEED * dt;
+            self.camera_pos -= forward * CAMERA_MOVE_SPEED * dt;
         }
         if keyboard::key_pressed(ctx, KeyCode::A) {
-            self.camera_pos.x -= CAMERA_MOVE_SPEED * dt;
+            self.camera_pos -= right * CAMERA_MOVE_SPEED * dt;
         }
         if keyboard::key_pressed(ctx, KeyCode::D) {
-            self.camera_pos.x += CAMERA_MOVE_SPEED * dt;
+            self.camera_pos += right * CAMERA_MOVE_SPEED * dt;
+        }
+
+        if keyboard::key_pressed(ctx, KeyCode::Q) {
+            self.camera_rot -= CAMERA_ROTATE_SPEED * dt;
+        }
+        if keyboard::key_pressed(ctx, KeyCode::E) {
+            self.camera_rot += CAMERA_ROTATE_SPEED * dt;
         }
 
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
@@ -94,15 +110,16 @@ impl Raymarcher {
     fn draw(&self, ctx: &mut Context) {
         canvas::clear_screen(ctx);
 
+        let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         for y in 0..canvas::height(ctx) {
             for x in 0..canvas::width(ctx) {
                 // Get uv coordinates and direction
-                let uv = vec3(
+                let screen_pos = vec3(
                     x as f32 - WIDTH as f32 / 2.0,
                     y as f32 - HEIGHT as f32 / 2.0,
                     FOCAL_LENGTH,
                 );
-                let dir = uv.normalize();
+                let dir = (rot_mat * screen_pos).normalize();
                 let color = self.raymarch(self.camera_pos, dir);
                 canvas::write_pixel_f32(ctx, x, y, &color.to_array());
             }
