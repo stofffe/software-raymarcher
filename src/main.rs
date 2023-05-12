@@ -3,14 +3,13 @@ mod surfaces;
 
 use core::f32;
 
-use glam::{vec3, Mat3, Vec3};
-use materials::{Flat, Material, Normal};
+use glam::{vec3, vec4, Mat3, Vec3, Vec4, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
     Context, KeyCode,
 };
-use surfaces::{Plane, SmoothUnion, Sphere, Surface};
+use surfaces::{Intersection, SmoothUnion, Sphere, Subtraction, Surface, Union};
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
@@ -30,7 +29,7 @@ const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 /// Holds state needed for ray marcher
 struct Raymarcher {
-    objects: Vec<Object>,
+    surfaces: Vec<Box<dyn Surface>>,
     camera_pos: Vec3,
     camera_rot: f32,
 }
@@ -57,15 +56,12 @@ impl Callbacks for Raymarcher {
 
 impl Raymarcher {
     fn new() -> Self {
-        let objects: Vec<Object> = vec![
-            Object::new(
-                Box::new(SmoothUnion::new(
-                    Box::new(Sphere::new(vec3(-1.0, 0.0, 0.0), 1.0)),
-                    Box::new(Sphere::new(vec3(1.0, 0.0, 0.0), 1.0)),
-                    1.0,
-                )),
-                Box::new(Flat::new(BLUE)),
-            ),
+        let surfaces: Vec<Box<dyn Surface>> = vec![
+            // Box::new(SmoothUnion::new(
+            //     Box::new(Sphere::new(vec3(-1.0, 0.0, 0.0), 1.0)),
+            //     Box::new(Sphere::new(vec3(1.0, 0.0, 0.0), 1.0)),
+            //     1.0,
+            // )),
             // Object::new(
             //     Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0)),
             //     Box::new(Flat::new(RED)),
@@ -78,11 +74,33 @@ impl Raymarcher {
             //     Box::new(Plane::new(vec3(1.0, -1.0, 0.0), -2.0)),
             //     Box::new(Flat::new(BLUE)),
             // ),
+            // Box::new(SmoothUnion::new(
+            //     Box::new(SmoothUnion::new(
+            //         Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
+            //         Box::new(Sphere::new(vec3(-2.0, 1.0, 0.0), 1.0, RED)),
+            //         1.0,
+            //     )),
+            //     Box::new(Sphere::new(vec3(-2.0, -1.0, 0.0), 1.0, GREEN)),
+            //     1.0,
+            // )),
+            // Box::new(Intersection::new(
+            //     Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
+            //     Box::new(Sphere::new(vec3(-0.5, 0.5, 0.0), 1.0, RED)),
+            // )),
+            Box::new(SmoothUnion::new(
+                Box::new(SmoothUnion::new(
+                    Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
+                    Box::new(Sphere::new(vec3(-2.0, 1.0, 0.0), 1.0, RED)),
+                    1.0,
+                )),
+                Box::new(Sphere::new(vec3(-2.0, -1.0, 0.0), 1.0, GREEN)),
+                1.0,
+            )),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         let camera_rot = 0.0;
         Self {
-            objects,
+            surfaces,
             camera_pos,
             camera_rot,
         }
@@ -116,7 +134,7 @@ impl Raymarcher {
         }
 
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/07.png";
+            let path = "outputs/11.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -145,12 +163,12 @@ impl Raymarcher {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ray_origin + ray_dir * t;
-            let distance = self.closest_sdf(pos);
-            if distance < SURFACE_DISTANCE {
+            let res = self.closest_sdf(pos);
+            if res.w < SURFACE_DISTANCE {
                 return self.hit(ray_dir, pos);
             }
 
-            t += distance;
+            t += res.w;
             if t >= MAX_DISTANCE {
                 break;
             }
@@ -159,10 +177,9 @@ impl Raymarcher {
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
-        let info = self.hitinfo(pos);
-        let object = &self.objects[info.object_index];
+        let color = self.closest_sdf(pos);
         let normal = self.normal(pos);
-        object.material.color(rd, pos, normal)
+        color.xyz()
     }
 
     fn miss(&self) -> Vec3 {
@@ -170,36 +187,19 @@ impl Raymarcher {
     }
 
     fn normal(&self, pos: Vec3) -> Vec3 {
-        let center = self.hitinfo(pos).distance;
-        let x = self.hitinfo(pos - vec3(EPSILON, 0.0, 0.0)).distance;
-        let y = self.hitinfo(pos - vec3(0.0, EPSILON, 0.0)).distance;
-        let z = self.hitinfo(pos - vec3(0.0, 0.0, EPSILON)).distance;
+        let center = self.closest_sdf(pos).w;
+        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0)).w;
+        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0)).w;
+        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON)).w;
         (vec3(x, y, z) - center) / EPSILON
     }
 
-    fn closest_sdf(&self, pos: Vec3) -> f32 {
-        let mut closest = MAX_DISTANCE;
-        for object in self.objects.iter() {
-            let dist = object.surface.sdf(pos);
-            if dist < closest {
-                closest = dist;
-            }
-        }
-        closest
-    }
-
-    fn hitinfo(&self, pos: Vec3) -> HitInfo {
-        let mut closest = HitInfo {
-            distance: MAX_DISTANCE,
-            object_index: 0,
-        };
-        for (i, object) in self.objects.iter().enumerate() {
-            let dist = object.surface.sdf(pos);
-            if dist < closest.distance {
-                closest = HitInfo {
-                    distance: dist,
-                    object_index: i,
-                };
+    fn closest_sdf(&self, pos: Vec3) -> Vec4 {
+        let mut closest = vec4(0.0, 0.0, 0.0, MAX_DISTANCE);
+        for (i, surface) in self.surfaces.iter().enumerate() {
+            let res = surface.sdf(pos);
+            if res.w < closest.w {
+                closest = res;
             }
         }
         closest
@@ -209,17 +209,6 @@ impl Raymarcher {
 struct HitInfo {
     distance: f32,
     object_index: usize,
-}
-
-struct Object {
-    surface: Box<dyn Surface>,
-    material: Box<dyn Material>,
-}
-
-impl Object {
-    fn new(surface: Box<dyn Surface>, material: Box<dyn Material>) -> Self {
-        Object { surface, material }
-    }
 }
 
 fn main() {
