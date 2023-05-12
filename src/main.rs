@@ -1,9 +1,16 @@
+mod materials;
+mod surfaces;
+
+use core::f32;
+
 use glam::{vec3, Mat3, Vec3};
+use materials::{Flat, Material, Normal};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
     Context, KeyCode,
 };
+use surfaces::{Plane, SmoothUnion, Sphere, Surface};
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
@@ -52,17 +59,25 @@ impl Raymarcher {
     fn new() -> Self {
         let objects: Vec<Object> = vec![
             Object::new(
-                Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0)),
-                Box::new(Flat::new(RED)),
-            ),
-            Object::new(
-                Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0)),
-                Box::new(Normal),
-            ),
-            Object::new(
-                Box::new(Plane::new(vec3(1.0, -1.0, 0.0), -2.0)),
+                Box::new(SmoothUnion::new(
+                    Box::new(Sphere::new(vec3(-1.0, 0.0, 0.0), 1.0)),
+                    Box::new(Sphere::new(vec3(1.0, 0.0, 0.0), 1.0)),
+                    1.0,
+                )),
                 Box::new(Flat::new(BLUE)),
             ),
+            // Object::new(
+            //     Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0)),
+            //     Box::new(Flat::new(RED)),
+            // ),
+            // Object::new(
+            //     Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0)),
+            //     Box::new(Normal),
+            // ),
+            // Object::new(
+            //     Box::new(Plane::new(vec3(1.0, -1.0, 0.0), -2.0)),
+            //     Box::new(Flat::new(BLUE)),
+            // ),
         ];
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         let camera_rot = 0.0;
@@ -76,9 +91,9 @@ impl Raymarcher {
     fn input(&mut self, ctx: &Context, dt: f32) {
         let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         let rot_mat = rot_mat.to_cols_array_2d();
-        let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
+        let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]).normalize();
+        let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
         let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
-        let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
 
         if keyboard::key_pressed(ctx, KeyCode::W) {
             self.camera_pos += forward * CAMERA_MOVE_SPEED * dt;
@@ -101,7 +116,7 @@ impl Raymarcher {
         }
 
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/05.png";
+            let path = "outputs/07.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -191,11 +206,6 @@ impl Raymarcher {
     }
 }
 
-fn main() {
-    let app = Raymarcher::new();
-    pixel_renderer::app::run(app)
-}
-
 struct HitInfo {
     distance: f32,
     object_index: usize,
@@ -212,75 +222,7 @@ impl Object {
     }
 }
 
-trait Material {
-    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3) -> Vec3;
-}
-
-/// Flat color not affected by light
-struct Flat {
-    color: Vec3,
-}
-
-impl Flat {
-    fn new(color: Vec3) -> Self {
-        Self { color }
-    }
-}
-
-impl Material for Flat {
-    fn color(&self, _ray: Vec3, _pos: Vec3, _normal: Vec3) -> Vec3 {
-        self.color
-    }
-}
-
-/// Material that outputs the normal as a color
-struct Normal;
-
-impl Material for Normal {
-    fn color(&self, _ray: Vec3, _pos: Vec3, normal: Vec3) -> Vec3 {
-        normal
-    }
-}
-
-/// Represents a surface defined by a SDF
-trait Surface {
-    fn sdf(&self, pos: Vec3) -> f32;
-}
-
-// Surface representing a sphere defined by position and radius
-struct Sphere {
-    pos: Vec3,
-    radius: f32,
-}
-
-impl Sphere {
-    fn new(pos: Vec3, radius: f32) -> Self {
-        Self { pos, radius }
-    }
-}
-
-impl Surface for Sphere {
-    fn sdf(&self, pos: Vec3) -> f32 {
-        self.pos.distance(pos) - self.radius
-    }
-}
-
-/// Surface representing a plane defined by a normal
-/// height defines distance moved along normal
-struct Plane {
-    normal: Vec3,
-    height: f32,
-}
-
-impl Plane {
-    fn new(normal: Vec3, height: f32) -> Self {
-        let normal = normal.normalize();
-        Self { normal, height }
-    }
-}
-
-impl Surface for Plane {
-    fn sdf(&self, pos: Vec3) -> f32 {
-        pos.dot(self.normal) - self.height
-    }
+fn main() {
+    let app = Raymarcher::new();
+    pixel_renderer::app::run(app)
 }
