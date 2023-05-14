@@ -1,6 +1,4 @@
-use glam::{vec3, vec4, Vec3, Vec4, Vec4Swizzles};
-
-use crate::materials::Material;
+use glam::{vec4, Quat, Vec3, Vec4, Vec4Swizzles};
 
 // TODO implement blending for non smooth union, subtraction and intersection
 
@@ -10,6 +8,7 @@ pub trait Surface {
 }
 
 // Surface representing a sphere defined by position and radius
+// TODO pos should be represented using translation?
 pub struct Sphere {
     pos: Vec3,
     radius: f32,
@@ -29,25 +28,76 @@ impl Surface for Sphere {
     }
 }
 
-// /// Surface representing a plane defined by a normal
-// /// height defines distance moved along normal
-// pub struct Plane {
-//     normal: Vec3,
-//     height: f32,
-// }
-//
-// impl Plane {
-//     pub fn new(normal: Vec3, height: f32) -> Self {
-//         let normal = normal.normalize();
-//         Self { normal, height }
-//     }
-// }
-//
-// impl Surface for Plane {
-//     fn sdf(&self, pos: Vec3) -> f32 {
-//         Vec3::dot(pos, self.normal) - self.height
-//     }
-// }
+pub struct BoxExact {
+    b: Vec3,
+    color: Vec3,
+}
+
+impl BoxExact {
+    pub fn new(b: Vec3, color: Vec3) -> Self {
+        Self { b, color }
+    }
+}
+
+impl Surface for BoxExact {
+    fn sdf(&self, pos: Vec3) -> Vec4 {
+        let q = pos.abs() - self.b;
+        let distance = q.max(Vec3::ZERO).length() + (q.x.max(q.y.max(q.z))).min(0.0);
+        vec4(self.color.x, self.color.y, self.color.z, distance)
+    }
+}
+
+/// Surface representing a plane defined by ```normal```
+/// ```origin_distance``` units from the origin
+pub struct Plane {
+    normal: Vec3,
+    origin_distance: f32,
+    color: Vec3,
+}
+
+impl Plane {
+    pub fn new(normal: Vec3, origin_distance: f32, color: Vec3) -> Self {
+        let normal = normal.normalize();
+        Self {
+            normal,
+            origin_distance,
+            color,
+        }
+    }
+}
+
+impl Surface for Plane {
+    fn sdf(&self, pos: Vec3) -> Vec4 {
+        let distance = pos.dot(self.normal) - self.origin_distance;
+        vec4(self.color.x, self.color.y, self.color.z, distance)
+    }
+}
+
+/// Surface that translates a child surface
+pub struct TranslationRotation {
+    translation: Vec3,
+    rotation: Quat,
+    surface: Box<dyn Surface>,
+}
+
+impl TranslationRotation {
+    pub fn new(surface: Box<dyn Surface>, translation: Vec3, rotation: Quat) -> Self {
+        Self {
+            surface,
+            translation,
+            rotation,
+        }
+    }
+}
+
+impl Surface for TranslationRotation {
+    fn sdf(&self, pos: Vec3) -> Vec4 {
+        let new_pos = self.rotation * (self.translation + pos);
+        self.surface.sdf(new_pos)
+    }
+    // let mat = Mat4::from_rotation_translation(self.rotation, self.translation).inverse();
+    // let new_pos = (mat * vec4(pos.x, pos.y, pos.z, 0.0)).xyz();
+}
 
 /// Surface representing union of two surfaces
 pub struct Union {

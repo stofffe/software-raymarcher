@@ -1,15 +1,11 @@
-mod materials;
-mod surfaces;
-
+use crate::surfaces::Surface;
 use core::f32;
-
-use glam::{vec3, vec4, Mat3, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec3, vec4, Mat3, Vec3, Vec4};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
     Context, KeyCode,
 };
-use surfaces::{Intersection, SmoothUnion, Sphere, Subtraction, Surface, Union};
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
@@ -20,15 +16,15 @@ const SURFACE_DISTANCE: f32 = 0.0001;
 const MAX_DISTANCE: f32 = 10.0;
 const MAX_STEPS: u32 = 100;
 
-const RED: Vec3 = vec3(1.0, 0.0, 0.0);
-const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
-const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
-
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
+pub const RED: Vec3 = vec3(1.0, 0.0, 0.0);
+pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
+pub const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
+
 /// Holds state needed for ray marcher
-struct Raymarcher {
+pub struct Raymarcher {
     surfaces: Vec<Box<dyn Surface>>,
     camera_pos: Vec3,
     camera_rot: f32,
@@ -55,48 +51,7 @@ impl Callbacks for Raymarcher {
 }
 
 impl Raymarcher {
-    fn new() -> Self {
-        let surfaces: Vec<Box<dyn Surface>> = vec![
-            // Box::new(SmoothUnion::new(
-            //     Box::new(Sphere::new(vec3(-1.0, 0.0, 0.0), 1.0)),
-            //     Box::new(Sphere::new(vec3(1.0, 0.0, 0.0), 1.0)),
-            //     1.0,
-            // )),
-            // Object::new(
-            //     Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0)),
-            //     Box::new(Flat::new(RED)),
-            // ),
-            // Object::new(
-            //     Box::new(Sphere::new(vec3(1.0, 1.0, -2.0), 1.0)),
-            //     Box::new(Normal),
-            // ),
-            // Object::new(
-            //     Box::new(Plane::new(vec3(1.0, -1.0, 0.0), -2.0)),
-            //     Box::new(Flat::new(BLUE)),
-            // ),
-            // Box::new(SmoothUnion::new(
-            //     Box::new(SmoothUnion::new(
-            //         Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
-            //         Box::new(Sphere::new(vec3(-2.0, 1.0, 0.0), 1.0, RED)),
-            //         1.0,
-            //     )),
-            //     Box::new(Sphere::new(vec3(-2.0, -1.0, 0.0), 1.0, GREEN)),
-            //     1.0,
-            // )),
-            // Box::new(Intersection::new(
-            //     Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
-            //     Box::new(Sphere::new(vec3(-0.5, 0.5, 0.0), 1.0, RED)),
-            // )),
-            Box::new(SmoothUnion::new(
-                Box::new(SmoothUnion::new(
-                    Box::new(Sphere::new(vec3(0.0, 0.0, 0.0), 1.0, BLUE)),
-                    Box::new(Sphere::new(vec3(-2.0, 1.0, 0.0), 1.0, RED)),
-                    1.0,
-                )),
-                Box::new(Sphere::new(vec3(-2.0, -1.0, 0.0), 1.0, GREEN)),
-                1.0,
-            )),
-        ];
+    pub fn new(surfaces: Vec<Box<dyn Surface>>) -> Self {
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         let camera_rot = 0.0;
         Self {
@@ -110,7 +65,7 @@ impl Raymarcher {
         let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         let rot_mat = rot_mat.to_cols_array_2d();
         let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]).normalize();
-        let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
+        let _up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
         let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
 
         if keyboard::key_pressed(ctx, KeyCode::W) {
@@ -179,7 +134,10 @@ impl Raymarcher {
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
         let color = self.closest_sdf(pos);
         let normal = self.normal(pos);
-        color.xyz()
+        let light = rd.normalize().dot(normal.normalize());
+        vec3(light, light, light)
+        // normal * normal
+        // color.xyz()
     }
 
     fn miss(&self) -> Vec3 {
@@ -206,12 +164,7 @@ impl Raymarcher {
     }
 }
 
-struct HitInfo {
-    distance: f32,
-    object_index: usize,
-}
-
-fn main() {
-    let app = Raymarcher::new();
-    pixel_renderer::app::run(app)
-}
+// struct HitInfo {
+//     distance: f32,
+//     object_index: usize,
+// }
