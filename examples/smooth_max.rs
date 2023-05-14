@@ -1,6 +1,6 @@
 use glam::vec3;
 use raymarching::{
-    materials::PhongShaded,
+    materials::{Normal, PhongShaded, Unlit},
     raymarcher::{Raymarcher, BLUE, GREEN, RED},
     surfaces::{SmoothUnion, Sphere, Surface},
 };
@@ -10,11 +10,11 @@ fn main() {
     let surfaces: Vec<Box<dyn Surface>> = vec![Box::new(SmoothUnion::new(
         Box::new(SmoothUnion::new(
             Box::new(Sphere::new( vec3(0.0, 0.0, 0.0), 1.0, Box::new(PhongShaded::new(BLUE)),)),
-            Box::new(Sphere::new( vec3(-2.0, 1.0, 0.0), 1.0, Box::new(PhongShaded::new(RED)),)),
+            Box::new(Sphere::new( vec3(-2.0, 1.0, 0.0), 1.0, Box::new(Unlit::new(RED)),)),
             1.0,
         )),
         Box::new(Sphere::new( vec3(-2.0, -1.0, 0.0), 1.0,
-            Box::new(PhongShaded::new(GREEN)),
+            Box::new(Normal),
         )),
         1.0,
     ))];
