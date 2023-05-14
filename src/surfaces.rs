@@ -1,14 +1,12 @@
 use glam::Vec3;
 
-use crate::materials::{CombinedMaterial, Lit, Material, Unlit};
-
-// TODO implement blending for non smooth union, subtraction and intersection
+use crate::materials::Material;
 
 /// Represents a surface defined by a SDF
 pub trait Surface {
     fn sdf(&self, pos: Vec3) -> f32;
-    fn material(&self) -> &dyn Material;
-    // fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3) -> Vec3;
+    // fn material(&self) -> &dyn Material;
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3;
 }
 
 // Surface representing a sphere defined by position and radius
@@ -34,15 +32,76 @@ impl Surface for Sphere {
         Vec3::distance(pos, self.pos) - self.radius
     }
 
-    fn material(&self) -> &dyn Material {
-        self.material.as_ref()
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
     }
-    //
-    // fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3) -> Vec3 {
-    //     self.material.color(ray, pos, normal)
-    // }
-    // vec4(self.color.x, self.color.y, self.color.z, distance)
 }
+
+/// Surface representing smooth union of two surfaces
+/// k is smoothing distance
+pub struct SmoothUnion {
+    surface1: Box<dyn Surface>,
+    surface2: Box<dyn Surface>,
+    k: f32,
+}
+
+impl SmoothUnion {
+    pub fn new(surface1: Box<dyn Surface>, surface2: Box<dyn Surface>, blend_factor: f32) -> Self {
+        Self {
+            surface1,
+            surface2,
+            k: blend_factor,
+        }
+    }
+}
+
+impl Surface for SmoothUnion {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let dist1 = self.surface1.sdf(pos);
+        let dist2 = self.surface2.sdf(pos);
+
+        // Distance
+        let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
+        f32::min(dist1, dist2) - h * h * 0.25 / self.k
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        let dist1 = self.surface1.sdf(pos);
+        let dist2 = self.surface2.sdf(pos);
+        let p = f32::clamp(0.5 + 0.5 * (dist1 - dist2) / self.k, 0.0, 1.0);
+
+        let color1 = self.surface1.color(ray, pos, normal, light_pos);
+        let color2 = self.surface2.color(ray, pos, normal, light_pos);
+        interpolate_vec3(color1, color2, p)
+    }
+}
+
+/// Interpolates two vec3 with p [0,1]
+pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
+    a * (1.0 - p) + b * p
+}
+// fn sdf(&self, pos: Vec3) -> Vec4 {
+//     let surf1 = self.surface1.sdf(pos);
+//     let surf2 = self.surface2.sdf(pos);
+//     let dist1 = surf1.w;
+//     let dist2 = surf2.w;
+//     let col1 = surf1.xyz();
+//     let col2 = surf2.xyz();
+//
+//     // Distance
+//     let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
+//     let distance = f32::min(dist1, dist2) - h * h * 0.25 / self.k;
+//
+//     // Color
+//     let p = f32::clamp(0.5 + 0.5 * (dist1 - dist2) / self.k, 0.0, 1.0);
+//     let color = interpolate_vec3(col1, col2, p);
+//
+//     vec4(color.x, color.y, color.z, distance)
+// }
+
+// let light = 0.1;
+// let color = vec3(p + light, p + light, p + light);
+// }
 
 // pub struct BoxExact {
 //     b: Vec3,
@@ -201,66 +260,3 @@ impl Surface for Sphere {
 //         }
 //     }
 // }
-//
-/// Surface representing smooth union of two surfaces
-/// k is smoothing distance
-// pub struct SmoothUnion<'a> {
-//     surface1: Box<dyn Surface>,
-//     surface2: Box<dyn Surface>,
-//     material: CombinedMaterial<'a>,
-//     k: f32,
-// }
-//
-// impl<'a> SmoothUnion<'a> {
-//     pub fn new(surface1: Box<dyn Surface>, surface2: Box<dyn Surface>, blend_factor: f32) -> Self {
-//         let material = CombinedMaterial::new(surface1.material(), surface2.material(), 1.0);
-//         Self {
-//             surface1,
-//             surface2,
-//             k: blend_factor,
-//             material,
-//         }
-//     }
-// }
-//
-// impl<'a> Surface for SmoothUnion<'a> {
-//     fn sdf(&self, pos: Vec3) -> f32 {
-//         let dist1 = self.surface1.sdf(pos);
-//         let dist2 = self.surface2.sdf(pos);
-//
-//         // Distance
-//         let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
-//         f32::min(dist1, dist2) - h * h * 0.25 / self.k
-//     }
-//
-//     fn material(&self) -> &dyn Material {
-//         &self.material
-//     }
-//
-// fn sdf(&self, pos: Vec3) -> Vec4 {
-//     let surf1 = self.surface1.sdf(pos);
-//     let surf2 = self.surface2.sdf(pos);
-//     let dist1 = surf1.w;
-//     let dist2 = surf2.w;
-//     let col1 = surf1.xyz();
-//     let col2 = surf2.xyz();
-//
-//     // Distance
-//     let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
-//     let distance = f32::min(dist1, dist2) - h * h * 0.25 / self.k;
-//
-//     // Color
-//     let p = f32::clamp(0.5 + 0.5 * (dist1 - dist2) / self.k, 0.0, 1.0);
-//     let color = interpolate_vec3(col1, col2, p);
-//
-//     vec4(color.x, color.y, color.z, distance)
-// }
-
-// let light = 0.1;
-// let color = vec3(p + light, p + light, p + light);
-// }
-
-/// Interpolates two vec3 with p [0,1]
-pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
-    a * (1.0 - p) + b * p
-}

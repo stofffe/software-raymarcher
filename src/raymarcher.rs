@@ -1,9 +1,6 @@
-use crate::{
-    materials::{Material, Unlit},
-    surfaces::{Sphere, Surface},
-};
+use crate::surfaces::Surface;
 use core::f32;
-use glam::{vec3, vec4, Mat3, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec3, Mat3, Vec3};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -22,7 +19,7 @@ const MAX_STEPS: u32 = 100;
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
-const INDIRECT_LIGHT: f32 = 0.2;
+pub const INDIRECT_LIGHT: f32 = 0.2;
 
 pub const RED: Vec3 = vec3(1.0, 0.0, 0.0);
 pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
@@ -189,13 +186,13 @@ impl Raymarcher {
         (vec3(x, y, z) - center) / EPSILON
     }
 
-    fn closest_sdf(&self, pos: Vec3) -> Option<(f32, &dyn Material)> {
-        let mut closest: Option<(f32, &dyn Material)> = None;
+    fn closest_sdf(&self, pos: Vec3) -> Option<(f32, &dyn Surface)> {
+        let mut closest: Option<(f32, &dyn Surface)> = None;
         for surface in self.surfaces.iter() {
             let res = surface.sdf(pos);
             match closest {
                 Some(c) if res >= c.0 => {}
-                _ => closest = Some((res, surface.material())),
+                _ => closest = Some((res, surface.as_ref())),
             }
         }
         closest
