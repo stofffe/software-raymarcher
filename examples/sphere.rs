@@ -1,17 +1,20 @@
 use glam::{vec3, Vec3};
 use raymarching::{
-    raymarcher::{Raymarcher, BLUE, GREEN, RED},
+    materials::{Lit, Normal, Unlit},
+    raymarcher::{Raymarcher, BLUE, GREEN, RED, YELLOW},
     surfaces::{Sphere, Surface},
 };
 
 fn main() {
+    #[rustfmt::skip]
     let surfaces: Vec<Box<dyn Surface>> = vec![
-        Box::new(Sphere::new(Vec3::ZERO, 1.0, RED)),
-        Box::new(Sphere::new(vec3(2.0, 0.0, 0.0), 1.0, BLUE)),
-        Box::new(Sphere::new(vec3(4.0, 3.0, 3.0), 1.0, GREEN)),
+        Box::new(Sphere::new(Vec3::ZERO, 1.0, Box::new(Lit::new(RED)))),
+        Box::new(Sphere::new( vec3(2.0, 0.0, 0.0), 1.0, Box::new(Normal),)),
+        Box::new(Sphere::new( vec3(4.0, 3.0, 3.0), 1.0, Box::new(Unlit::new(GREEN)),)),
+        Box::new(Sphere::new( vec3(-2.0, -2.0, -2.0), 0.2, Box::new(Unlit::new(YELLOW)),)),
     ];
-    let light_dir = vec3(1.0, 1.0, 1.0);
-    let app = Raymarcher::new(surfaces, light_dir);
+    let light_pos = vec3(-2.0, -1.0, -2.0);
+    let app = Raymarcher::new(surfaces, light_pos);
     pixel_renderer::app::run(app)
 }
 
