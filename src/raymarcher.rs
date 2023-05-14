@@ -1,6 +1,6 @@
 use crate::surfaces::Surface;
 use core::f32;
-use glam::{vec3, vec4, Mat3, Vec3, Vec4};
+use glam::{vec3, vec4, Mat3, Vec3, Vec4, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -28,6 +28,7 @@ pub struct Raymarcher {
     surfaces: Vec<Box<dyn Surface>>,
     camera_pos: Vec3,
     camera_rot: f32,
+    light_dir: Vec3,
 }
 
 impl Callbacks for Raymarcher {
@@ -51,13 +52,14 @@ impl Callbacks for Raymarcher {
 }
 
 impl Raymarcher {
-    pub fn new(surfaces: Vec<Box<dyn Surface>>) -> Self {
+    pub fn new(surfaces: Vec<Box<dyn Surface>>, light_dir: Vec3) -> Self {
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         let camera_rot = 0.0;
         Self {
             surfaces,
             camera_pos,
             camera_rot,
+            light_dir,
         }
     }
 
@@ -89,7 +91,7 @@ impl Raymarcher {
         }
 
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/11.png";
+            let path = "outputs/13.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -132,10 +134,13 @@ impl Raymarcher {
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
-        let color = self.closest_sdf(pos);
+        // println!("pos {pos}");
+        let res = self.closest_sdf(pos);
+        let color = res.xyz();
         let normal = self.normal(pos);
-        let light = rd.normalize().dot(normal.normalize());
-        vec3(light, light, light)
+        let light = Vec3::dot(normal.normalize(), self.light_dir.normalize()).max(0.0);
+        color * (light + 0.2)
+        // normal
         // normal * normal
         // color.xyz()
     }

@@ -14,6 +14,7 @@ fn main() {
         Box::new(Sphere::new(vec3(-2.0, -1.0, 0.0), 1.0, GREEN)),
         1.0,
     ))];
-    let app = Raymarcher::new(surfaces);
+    let light_dir = vec3(1.0, 1.0, 1.0);
+    let app = Raymarcher::new(surfaces, light_dir);
     pixel_renderer::app::run(app)
 }

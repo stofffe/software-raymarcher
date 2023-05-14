@@ -92,7 +92,7 @@ impl TranslationRotation {
 
 impl Surface for TranslationRotation {
     fn sdf(&self, pos: Vec3) -> Vec4 {
-        let new_pos = self.rotation * (self.translation + pos);
+        let new_pos = self.rotation * (self.translation - pos);
         self.surface.sdf(new_pos)
     }
     // let mat = Mat4::from_rotation_translation(self.rotation, self.translation).inverse();
