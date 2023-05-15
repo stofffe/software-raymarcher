@@ -74,24 +74,24 @@ impl Material for Textured {
 
 // Material that outputs a shaded color
 // Uses phong shading
-pub struct Shaded {
-    texture: Box<dyn Material>,
-}
-
-impl Shaded {
-    pub fn new(texture: Box<dyn Material>) -> Self {
-        Self { texture }
-    }
-}
-
-impl Material for Shaded {
-    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
-        let light_dir = pos - light_pos;
-        let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
-        let color = self.texture.color(ray, pos, normal, light_pos);
-        color * (light + INDIRECT_LIGHT)
-    }
-}
+// pub struct Shaded {
+//     texture: Box<dyn Material>,
+// }
+//
+// impl Shaded {
+//     pub fn new(texture: Box<dyn Material>) -> Self {
+//         Self { texture }
+//     }
+// }
+//
+// impl Material for Shaded {
+//     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+//         let light_dir = pos - light_pos;
+//         let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
+//         let color = self.texture.color(ray, pos, normal, light_pos);
+//         color * (light + INDIRECT_LIGHT)
+//     }
+// }
 
 /// Uses repeating
 pub struct Texture {

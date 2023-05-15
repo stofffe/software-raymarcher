@@ -3,7 +3,7 @@ use crate::{
     surfaces::{Sphere, Surface},
 };
 use core::f32;
-use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
+use glam::{vec3, vec4, Mat3, Vec3, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -27,10 +27,20 @@ const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
+const DIFFUSE: bool = true;
 const DISTANCE_FOG: bool = true;
-const SHADOWS: bool = true;
+const SHADOWS: Shadows = Shadows::Soft(16.0);
+// const SHADOWS: Shadows = Shadows::None;
+// const SHADOWS: Shadows = Shadows::Hard;
+const SHADOWS_FIRST_STEP: f32 = 0.1;
 
-pub const INDIRECT_LIGHT: f32 = 0.2;
+enum Shadows {
+    None,
+    Hard,
+    Soft(f32),
+}
+
+pub const INDIRECT_LIGHT: f32 = 0.1;
 
 pub const RED: Vec3 = vec3(1.0, 0.0, 0.0);
 pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
@@ -130,7 +140,7 @@ impl Raymarcher {
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/24.png";
+            let path = "outputs/25.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -215,39 +225,72 @@ impl Raymarcher {
         t
     }
 
-    fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
-        // Color
-        let (_, material) = self.closest_sdf(pos).unwrap();
-        let normal = self.normal(pos);
-        let mut color = material.color(rd, pos, normal, self.light_pos);
+    fn soft_shadow(&self, ray_origin: Vec3, ray_dir: Vec3, k: f32) -> f32 {
+        let mut t = 0.0;
+        let mut shadow: f32 = 1.0;
+        for _ in 0..MAX_STEPS {
+            let pos = ray_origin + ray_dir * t;
+            let dist = self.closest_sdf(pos).unwrap().0;
 
-        // Fog
-        if DISTANCE_FOG {
-            let distance_surface = (self.camera_pos - pos).length();
-            let fog = vec3(
-                1.0 - distance_surface / MAX_DISTANCE,
-                1.0 - distance_surface / MAX_DISTANCE,
-                1.0 - distance_surface / MAX_DISTANCE,
-            );
-            color *= fog;
-        }
-
-        if SHADOWS {
-            let light_dir = (self.light_pos - pos).normalize();
-            let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
-            let light_dist = (self.light_pos - pos).length();
-
-            // Hard
-            if dist < light_dist {
-                color *= 0.2;
+            if dist < SURFACE_DISTANCE {
+                return 0.0;
             }
 
-            // Soft
-            // if dist < light_dist {
-            //     color *= 0.2;
-            // }
+            shadow = shadow.min(k * dist / t);
+            t += dist;
+            if t >= MAX_DISTANCE {
+                break;
+            }
+        }
+        shadow
+    }
+
+    fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
+        let normal = self.normal(pos).normalize();
+        let light_dir = (self.light_pos - pos).normalize();
+
+        // Color
+        let (_, material) = self.closest_sdf(pos).unwrap();
+        let mut color = material.color(rd, pos, normal, self.light_pos);
+
+        // Diffuse
+        let mut diffuse = 1.0;
+        if DIFFUSE {
+            // let light_dir = pos - self.light_pos;
+            diffuse = 1.0 - Vec3::dot(normal, light_dir).max(0.0);
         }
 
+        // Fog
+        let mut fog = 1.0;
+        if DISTANCE_FOG {
+            let distance_surface = (self.camera_pos - pos).length();
+            fog = 1.0 - distance_surface / MAX_DISTANCE;
+        }
+
+        // Shadows
+        let mut shadows = 1.0;
+        match SHADOWS {
+            Shadows::Hard => {
+                let light_dist = (self.light_pos - pos).length();
+                let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
+                if dist < light_dist {
+                    shadows = 0.0;
+                    // color *= 0.0;
+                }
+            }
+            Shadows::Soft(_) => {
+                let shadow =
+                    self.soft_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir, 16.0);
+                shadows = shadow;
+                // color *= shadow;
+            }
+            Shadows::None => {}
+        }
+
+        // Apply shading
+        color *= (diffuse * fog * shadows) + INDIRECT_LIGHT;
+
+        // Gamma correction
         color = color.powf(0.4545);
 
         color
