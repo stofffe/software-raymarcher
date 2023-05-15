@@ -1248,6 +1248,7 @@ name = "raymarching"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "image",
  "pixel_renderer",
 ]
 

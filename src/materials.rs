@@ -1,4 +1,5 @@
-use glam::Vec3;
+use glam::{vec3, Vec3};
+use image::{DynamicImage, GenericImageView, Pixel};
 
 use crate::raymarcher::INDIRECT_LIGHT;
 
@@ -50,5 +51,58 @@ impl Material for PhongShaded {
         let light_dir = pos - light_pos;
         let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
         self.color * (light + INDIRECT_LIGHT)
+    }
+}
+
+// Texture
+pub struct Textured {
+    texture: Texture,
+}
+
+impl Textured {
+    pub fn new(texture_path: &str) -> Self {
+        let texture = Texture::new(texture_path);
+        Self { texture }
+    }
+}
+
+impl Material for Textured {
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        // let color = self.texture.sample(pos.x, pos.y);
+        let x = self.texture.sample(pos.y, pos.z);
+        let y = self.texture.sample(pos.z, pos.x);
+        let z = self.texture.sample(pos.x, pos.y);
+
+        let mut weight = normal.abs();
+        weight = weight / (weight.x + weight.y + weight.z);
+
+        let color = x * weight.x + y * weight.y + z * weight.z;
+
+        // let color = vec3(pos.x.abs() % 1.0, pos.y.abs() % 1.0, 0.0);
+        color
+    }
+}
+
+/// Uses repeating
+pub struct Texture {
+    image: DynamicImage,
+}
+impl Texture {
+    pub fn new(path: &str) -> Self {
+        let image = image::open(path).unwrap();
+        Self { image }
+    }
+
+    /// Returns the color of the pixel
+    fn sample(&self, x: f32, y: f32) -> Vec3 {
+        let x = (x.abs() % 1.0) * self.image.width() as f32;
+        let y = (y.abs() % 1.0) * self.image.height() as f32;
+
+        let rgba = self.image.get_pixel(x as u32, y as u32).to_rgba();
+        vec3(
+            rgba[0] as f32 / 255.0,
+            rgba[1] as f32 / 255.0,
+            rgba[2] as f32 / 255.0,
+        )
     }
 }

@@ -12,7 +12,7 @@ pub trait Surface {
 // Surface representing a sphere defined by position and radius
 // TODO pos should be represented using translation?
 pub struct Sphere {
-    pos: Vec3,
+    pub pos: Vec3,
     radius: f32,
     material: Box<dyn Material>,
 }

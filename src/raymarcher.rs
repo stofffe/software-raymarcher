@@ -1,4 +1,7 @@
-use crate::surfaces::Surface;
+use crate::{
+    materials::{Material, Unlit},
+    surfaces::{Sphere, Surface},
+};
 use core::f32;
 use glam::{vec3, Mat3, Vec3};
 use pixel_renderer::{
@@ -9,6 +12,10 @@ use pixel_renderer::{
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
+
+// const WIDTH: u32 = 1920;
+// const HEIGHT: u32 = 1080;
+
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
 const EPSILON: f32 = 0.001; // should be smaller than surface distance
@@ -26,7 +33,7 @@ pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
 pub const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
 pub const WHITE: Vec3 = vec3(1.0, 1.0, 1.0);
 pub const YELLOW: Vec3 = vec3(1.0, 1.0, 0.0);
-pub const PINK: Vec3 = vec3(1.0, 0.8, 0.8);
+pub const PINK: Vec3 = vec3(1.0, 0.5, 0.5);
 
 // const DEFAULT_MATERIAL: Box<dyn Material> = Box::new(Flat::new(PINK));
 
@@ -36,6 +43,7 @@ pub struct Raymarcher {
     camera_pos: Vec3,
     camera_rot: f32,
     light_pos: Vec3,
+    debug_light: Sphere,
 }
 
 impl Callbacks for Raymarcher {
@@ -62,11 +70,14 @@ impl Raymarcher {
     pub fn new(surfaces: Vec<Box<dyn Surface>>, light_pos: Vec3) -> Self {
         let camera_pos = Vec3::new(0.0, 0.0, -5.0);
         let camera_rot = 0.0;
+        let default_material = Box::new(Unlit::new(WHITE));
+        let debug_light = Sphere::new(light_pos, 0.1, default_material);
         Self {
             surfaces,
             camera_pos,
             camera_rot,
             light_pos,
+            debug_light,
         }
     }
 
@@ -111,10 +122,11 @@ impl Raymarcher {
         if keyboard::key_pressed(ctx, KeyCode::Left) {
             self.light_pos.x -= CAMERA_MOVE_SPEED * dt;
         }
+        self.debug_light.pos = self.light_pos;
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/16.png";
+            let path = "outputs/20.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -148,12 +160,13 @@ impl Raymarcher {
         for _ in 0..MAX_STEPS {
             let pos = ray_origin + ray_dir * t;
             let res = self.closest_sdf(pos).unwrap();
+            let dist = res.0;
 
-            if res.0 < SURFACE_DISTANCE {
+            if dist < SURFACE_DISTANCE {
                 return self.hit(ray_dir, pos);
             }
 
-            t += res.0;
+            t += dist;
             if t >= MAX_DISTANCE {
                 break;
             }
@@ -162,16 +175,9 @@ impl Raymarcher {
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
-        // println!("pos {pos}");
         let (_, material) = self.closest_sdf(pos).unwrap();
         let normal = self.normal(pos);
         material.color(rd, pos, normal, self.light_pos)
-        // let light_dir = pos - self.light_pos;
-        // let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
-        // color * (light + INDIRECT_LIGHT)
-        // normal
-        // normal * normal
-        // color.xyz()
     }
 
     fn miss(&self) -> Vec3 {
@@ -195,16 +201,15 @@ impl Raymarcher {
                 _ => closest = Some((res, surface.as_ref())),
             }
         }
-        closest
 
-        // // DEBUG Light
-        // let light_sphere = Sphere::new(self.light_pos, 0.1, DEFAULT_MATERIAL);
-        // let light_sphere_res = light_sphere.sdf(pos);
-        // if light_sphere_res.0 < closest.0 {
-        //     closest = light_sphere_res;
-        // }
-        //
-        // closest
+        // DEBUG Light
+        let light_sphere_res = self.debug_light.sdf(pos);
+        match closest {
+            Some(c) if light_sphere_res >= c.0 => {}
+            _ => closest = Some((light_sphere_res, &self.debug_light)),
+        }
+
+        closest
     }
 }
 
