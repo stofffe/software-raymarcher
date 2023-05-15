@@ -11,7 +11,7 @@ fn main() {
         Box::new(Sphere::new(Vec3::ZERO, 1.0, Box::new(Shaded::new(Box::new(Unlit::new(RED)))))),
         Box::new(Sphere::new( vec3(2.0, 0.0, 0.0), 1.0, Box::new(Normal),)),
         Box::new(Sphere::new( vec3(4.0, 3.0, 3.0), 1.0, Box::new(Unlit::new(GREEN)),)),
-        Box::new(Sphere::new( vec3(-2.0, -2.0, -2.0), 0.2, Box::new(Unlit::new(YELLOW)),)),
+        Box::new(Sphere::new( vec3(-2.0, -2.0, -2.0), 0.2, Box::new(Shaded::new(Box::new(Unlit::new(YELLOW)))))),
     ];
     let light_pos = vec3(-2.0, -1.0, -2.0);
     let app = Raymarcher::new(surfaces, light_pos);

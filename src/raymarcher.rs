@@ -18,8 +18,8 @@ const HEIGHT: u32 = 512;
 
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
-const EPSILON: f32 = 0.001; // should be smaller than surface distance
-const SURFACE_DISTANCE: f32 = 0.01;
+const SURFACE_DISTANCE: f32 = 0.0001;
+const EPSILON: f32 = SURFACE_DISTANCE / 10.0; // should be smaller than surface distance
 const MAX_DISTANCE: f32 = 50.0;
 const MAX_STEPS: u32 = 100;
 
@@ -28,6 +28,7 @@ const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
 const DISTANCE_FOG: bool = true;
+const SHADOWS: bool = true;
 
 pub const INDIRECT_LIGHT: f32 = 0.2;
 
@@ -129,7 +130,7 @@ impl Raymarcher {
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/22.png";
+            let path = "outputs/24.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -145,7 +146,7 @@ impl Raymarcher {
             FOCAL_LENGTH,
         );
         let dir = (rot_mat * screen_pos).normalize();
-        self.raymarch(self.camera_pos, dir)
+        self.raymarch_color(self.camera_pos, dir)
     }
 
     // Anti aliasing, sample 4 close points
@@ -161,7 +162,7 @@ impl Raymarcher {
                 FOCAL_LENGTH,
             );
             let dir = (rot_mat * screen_pos).normalize();
-            color += self.raymarch(self.camera_pos, dir);
+            color += self.raymarch_color(self.camera_pos, dir);
         }
         color / 4.0
     }
@@ -185,7 +186,16 @@ impl Raymarcher {
         }
     }
 
-    fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Vec3 {
+    fn raymarch_color(&self, ray_origin: Vec3, ray_dir: Vec3) -> Vec3 {
+        let t = self.raymarch_distance(ray_origin, ray_dir);
+        if t < MAX_DISTANCE {
+            let pos = ray_origin + ray_dir * t;
+            return self.hit(ray_dir, pos);
+        }
+        self.miss()
+    }
+
+    fn raymarch_distance(&self, ray_origin: Vec3, ray_dir: Vec3) -> f32 {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ray_origin + ray_dir * t;
@@ -193,7 +203,8 @@ impl Raymarcher {
             let dist = res.0;
 
             if dist < SURFACE_DISTANCE {
-                return self.hit(ray_dir, pos);
+                return t;
+                // return self.hit(ray_dir, pos);
             }
 
             t += dist;
@@ -201,7 +212,7 @@ impl Raymarcher {
                 break;
             }
         }
-        self.miss()
+        t
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
@@ -219,6 +230,17 @@ impl Raymarcher {
                 1.0 - distance_surface / MAX_DISTANCE,
             );
             color *= fog;
+        }
+
+        if SHADOWS {
+            let light_dir = (self.light_pos - pos).normalize();
+            let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
+            let light_dist = (self.light_pos - pos).length();
+            // println!("{dist} {}", light_dist);
+            if dist < light_dist {
+                // println!("{dist}");
+                return color * 0.2;
+            }
         }
 
         color
@@ -248,11 +270,11 @@ impl Raymarcher {
         }
 
         // DEBUG Light
-        let light_sphere_res = self.debug_light.sdf(pos);
-        match closest {
-            Some(c) if light_sphere_res >= c.0 => {}
-            _ => closest = Some((light_sphere_res, &self.debug_light)),
-        }
+        // let light_sphere_res = self.debug_light.sdf(pos);
+        // match closest {
+        //     Some(c) if light_sphere_res >= c.0 => {}
+        //     _ => closest = Some((light_sphere_res, &self.debug_light)),
+        // }
 
         closest
     }

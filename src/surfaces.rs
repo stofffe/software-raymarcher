@@ -37,6 +37,28 @@ impl Surface for Sphere {
     }
 }
 
+pub struct BoxExact {
+    b: Vec3,
+    material: Box<dyn Material>,
+}
+
+impl BoxExact {
+    pub fn new(b: Vec3, material: Box<dyn Material>) -> Self {
+        Self { b, material }
+    }
+}
+
+impl Surface for BoxExact {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let q = pos.abs() - self.b;
+        q.max(Vec3::ZERO).length() + (q.x.max(q.y.max(q.z))).min(0.0)
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
 /// Surface representing a plane defined by ```normal```
 /// ```origin_distance``` units from the origin
 pub struct Plane {
@@ -132,24 +154,6 @@ pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
 // let color = vec3(p + light, p + light, p + light);
 // }
 
-// pub struct BoxExact {
-//     b: Vec3,
-//     color: Vec3,
-// }
-//
-// impl BoxExact {
-//     pub fn new(b: Vec3, color: Vec3) -> Self {
-//         Self { b, color }
-//     }
-// }
-//
-// impl Surface for BoxExact {
-//     fn sdf(&self, pos: Vec3) -> Vec4 {
-//         let q = pos.abs() - self.b;
-//         let distance = q.max(Vec3::ZERO).length() + (q.x.max(q.y.max(q.z))).min(0.0);
-//         vec4(self.color.x, self.color.y, self.color.z, distance)
-//     }
-// }
 //
 //
 // /// Surface that translates a child surface
