@@ -1,5 +1,5 @@
 use crate::{
-    materials::{Material, Unlit},
+    materials::Unlit,
     surfaces::{Sphere, Surface},
 };
 use core::f32;
@@ -126,7 +126,7 @@ impl Raymarcher {
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/20.png";
+            let path = "outputs/21.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
