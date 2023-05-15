@@ -105,10 +105,24 @@ impl Texture {
 
     /// Returns the color of the pixel
     fn sample(&self, x: f32, y: f32) -> Vec3 {
-        let x = (x.abs() % 1.0) * self.image.width() as f32;
-        let y = (y.abs() % 1.0) * self.image.height() as f32;
+        // Turn world position into texture position [0,1] range
+        let mut x_01 = x % 1.0;
+        if x_01 < 0.0 {
+            x_01 += 1.0;
+        }
+        let mut y_scaled = y % 1.0;
+        if y_scaled < 0.0 {
+            y_scaled += 1.0;
+        }
 
-        let rgba = self.image.get_pixel(x as u32, y as u32).to_rgba();
+        // Turn [0,1] range to texture position
+        let x_screen = (x_01 % 1.0) * self.image.width() as f32;
+        let y_screen = (y_scaled % 1.0) * self.image.height() as f32;
+
+        let rgba = self
+            .image
+            .get_pixel(x_screen as u32, y_screen as u32)
+            .to_rgba();
         vec3(
             rgba[0] as f32 / 255.0,
             rgba[1] as f32 / 255.0,

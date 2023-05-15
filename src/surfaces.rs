@@ -37,6 +37,35 @@ impl Surface for Sphere {
     }
 }
 
+/// Surface representing a plane defined by ```normal```
+/// ```origin_distance``` units from the origin
+pub struct Plane {
+    normal: Vec3,
+    origin_distance: f32,
+    material: Box<dyn Material>,
+}
+
+impl Plane {
+    pub fn new(normal: Vec3, origin_distance: f32, material: Box<dyn Material>) -> Self {
+        let normal = normal.normalize();
+        Self {
+            normal,
+            origin_distance,
+            material,
+        }
+    }
+}
+
+impl Surface for Plane {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        pos.dot(self.normal) - self.origin_distance
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
 /// Surface representing smooth union of two surfaces
 /// k is smoothing distance
 pub struct SmoothUnion {
@@ -122,31 +151,6 @@ pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
 //     }
 // }
 //
-// /// Surface representing a plane defined by ```normal```
-// /// ```origin_distance``` units from the origin
-// pub struct Plane {
-//     normal: Vec3,
-//     origin_distance: f32,
-//     color: Vec3,
-// }
-//
-// impl Plane {
-//     pub fn new(normal: Vec3, origin_distance: f32, color: Vec3) -> Self {
-//         let normal = normal.normalize();
-//         Self {
-//             normal,
-//             origin_distance,
-//             color,
-//         }
-//     }
-// }
-//
-// impl Surface for Plane {
-//     fn sdf(&self, pos: Vec3) -> Vec4 {
-//         let distance = pos.dot(self.normal) - self.origin_distance;
-//         vec4(self.color.x, self.color.y, self.color.z, distance)
-//     }
-// }
 //
 // /// Surface that translates a child surface
 // pub struct TranslationRotation {
