@@ -236,12 +236,19 @@ impl Raymarcher {
             let light_dir = (self.light_pos - pos).normalize();
             let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
             let light_dist = (self.light_pos - pos).length();
-            // println!("{dist} {}", light_dist);
+
+            // Hard
             if dist < light_dist {
-                // println!("{dist}");
-                return color * 0.2;
+                color *= 0.2;
             }
+
+            // Soft
+            // if dist < light_dist {
+            //     color *= 0.2;
+            // }
         }
+
+        color = color.powf(0.4545);
 
         color
     }
