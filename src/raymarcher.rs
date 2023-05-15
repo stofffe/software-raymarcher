@@ -3,7 +3,7 @@ use crate::{
     surfaces::{Sphere, Surface},
 };
 use core::f32;
-use glam::{vec3, Mat3, Vec3};
+use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -25,6 +25,8 @@ const MAX_STEPS: u32 = 100;
 
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
+
+const ANTI_ALIASING: bool = true;
 
 pub const INDIRECT_LIGHT: f32 = 0.2;
 
@@ -132,30 +134,54 @@ impl Raymarcher {
         }
     }
 
-    fn draw(&self, ctx: &mut Context) {
+    // Sample middle of pixel
+    fn single_sample_draw(&self, x: u32, y: u32) -> Vec3 {
+        let rot_mat = Mat3::from_rotation_y(self.camera_rot);
+        // Sample single point
+        let screen_pos = vec3(
+            x as f32 - WIDTH as f32 / 2.0,
+            y as f32 - HEIGHT as f32 / 2.0,
+            FOCAL_LENGTH,
+        );
+        let dir = (rot_mat * screen_pos).normalize();
+        self.raymarch(self.camera_pos, dir)
+    }
+
+    // Anti aliasing, sample 4 close points
+    fn anti_alias_draw(&self, x: u32, y: u32) -> Vec3 {
+        let mut color = Vec3::ZERO;
+        let rot_mat = Mat3::from_rotation_y(self.camera_rot);
+
+        let e = vec4(0.125, -0.125, 0.375, -0.375);
+        for offset in [e.xz(), e.yw(), e.wx(), e.zy()] {
+            let screen_pos = vec3(
+                (x as f32 - WIDTH as f32 / 2.0) + offset.x,
+                (y as f32 - HEIGHT as f32 / 2.0) + offset.y,
+                FOCAL_LENGTH,
+            );
+            let dir = (rot_mat * screen_pos).normalize();
+            color += self.raymarch(self.camera_pos, dir);
+        }
+        color / 4.0
+    }
+
+    fn draw(&mut self, ctx: &mut Context) {
         canvas::clear_screen(ctx);
 
-        let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         for y in 0..canvas::height(ctx) {
             for x in 0..canvas::width(ctx) {
-                // Get uv coordinates and direction
-                let screen_pos = vec3(
-                    x as f32 - WIDTH as f32 / 2.0,
-                    y as f32 - HEIGHT as f32 / 2.0,
-                    FOCAL_LENGTH,
-                );
-                let dir = (rot_mat * screen_pos).normalize();
-                let color = self.raymarch(self.camera_pos, dir);
+                let color = if ANTI_ALIASING {
+                    self.anti_alias_draw(x, y)
+                } else {
+                    self.single_sample_draw(x, y)
+                };
+
                 canvas::write_pixel_f32(ctx, x, y, &color.to_array());
             }
         }
     }
 
     fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Vec3 {
-        // if self.surfaces.is_empty() {
-        //     return self.miss()
-        // }
-
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ray_origin + ray_dir * t;
@@ -182,6 +208,7 @@ impl Raymarcher {
 
     fn miss(&self) -> Vec3 {
         Vec3::ZERO
+        // vec3(0.0, 8.0, 8.0)
     }
 
     fn normal(&self, pos: Vec3) -> Vec3 {
