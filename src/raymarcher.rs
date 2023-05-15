@@ -27,6 +27,7 @@ const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
+const DISTANCE_FOG: bool = true;
 
 pub const INDIRECT_LIGHT: f32 = 0.2;
 
@@ -128,7 +129,7 @@ impl Raymarcher {
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/21.png";
+            let path = "outputs/22.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -170,11 +171,14 @@ impl Raymarcher {
 
         for y in 0..canvas::height(ctx) {
             for x in 0..canvas::width(ctx) {
+                // Anti aliasing
                 let color = if ANTI_ALIASING {
                     self.anti_alias_draw(x, y)
                 } else {
                     self.single_sample_draw(x, y)
                 };
+
+                // Distance fog
 
                 canvas::write_pixel_f32(ctx, x, y, &color.to_array());
             }
@@ -201,9 +205,23 @@ impl Raymarcher {
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
+        // Color
         let (_, material) = self.closest_sdf(pos).unwrap();
         let normal = self.normal(pos);
-        material.color(rd, pos, normal, self.light_pos)
+        let mut color = material.color(rd, pos, normal, self.light_pos);
+
+        // Fog
+        if DISTANCE_FOG {
+            let distance_surface = (self.camera_pos - pos).length();
+            let fog = vec3(
+                1.0 - distance_surface / MAX_DISTANCE,
+                1.0 - distance_surface / MAX_DISTANCE,
+                1.0 - distance_surface / MAX_DISTANCE,
+            );
+            color *= fog;
+        }
+
+        color
     }
 
     fn miss(&self) -> Vec3 {
