@@ -10,18 +10,20 @@ use pixel_renderer::{
     Context, KeyCode,
 };
 
-const WIDTH: u32 = 512;
-const HEIGHT: u32 = 512;
+// const WIDTH: u32 = 512;
+// const HEIGHT: u32 = 512;
 
-// const WIDTH: u32 = 1920;
-// const HEIGHT: u32 = 1080;
+const WIDTH: u32 = 1920;
+const HEIGHT: u32 = 1080;
+
+const INITAL_CAMERA_POS: Vec3 = vec3(0.0, 2.5, -5.0);
 
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
 const SURFACE_DISTANCE: f32 = 0.0001;
 const EPSILON: f32 = SURFACE_DISTANCE / 10.0; // should be smaller than surface distance
 const MAX_DISTANCE: f32 = 50.0;
-const MAX_STEPS: u32 = 100;
+const MAX_STEPS: u32 = 1000;
 
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
@@ -29,9 +31,9 @@ const CAMERA_ROTATE_SPEED: f32 = 1.0;
 const ANTI_ALIASING: bool = true;
 const DIFFUSE: bool = true;
 const DISTANCE_FOG: bool = true;
-const SHADOWS: Shadows = Shadows::Soft(16.0);
+// const SHADOWS: Shadows = Shadows::Soft(128.0);
 // const SHADOWS: Shadows = Shadows::None;
-// const SHADOWS: Shadows = Shadows::Hard;
+const SHADOWS: Shadows = Shadows::Hard;
 const SHADOWS_FIRST_STEP: f32 = 0.1;
 
 enum Shadows {
@@ -82,7 +84,7 @@ impl Callbacks for Raymarcher {
 
 impl Raymarcher {
     pub fn new(surfaces: Vec<Box<dyn Surface>>, light_pos: Vec3) -> Self {
-        let camera_pos = Vec3::new(0.0, 0.0, -5.0);
+        let camera_pos = INITAL_CAMERA_POS;
         let camera_rot = 0.0;
         let default_material = Box::new(Unlit::new(WHITE));
         let debug_light = Sphere::new(light_pos, 0.1, default_material);
@@ -99,7 +101,7 @@ impl Raymarcher {
         let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         let rot_mat = rot_mat.to_cols_array_2d();
         let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]).normalize();
-        let _up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
+        let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
         let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
 
         // Camera
@@ -122,6 +124,12 @@ impl Raymarcher {
         if keyboard::key_pressed(ctx, KeyCode::E) {
             self.camera_rot += CAMERA_ROTATE_SPEED * dt;
         }
+        if keyboard::key_pressed(ctx, KeyCode::X) {
+            self.camera_pos += up * CAMERA_MOVE_SPEED * dt;
+        }
+        if keyboard::key_pressed(ctx, KeyCode::Z) {
+            self.camera_pos -= up * CAMERA_MOVE_SPEED * dt;
+        }
 
         // Lights
         if keyboard::key_pressed(ctx, KeyCode::Up) {
@@ -139,8 +147,8 @@ impl Raymarcher {
         self.debug_light.center = self.light_pos;
 
         // Media
-        if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/25.png";
+        if keyboard::key_just_pressed(ctx, KeyCode::P) {
+            let path = "outputs/27.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -152,6 +160,24 @@ impl Raymarcher {
             -(y as f32 - HEIGHT as f32 / 2.0) + offset.y,
             FOCAL_LENGTH,
         )
+    }
+
+    fn draw(&mut self, ctx: &mut Context) {
+        canvas::clear_screen(ctx);
+
+        for y in 0..canvas::height(ctx) {
+            for x in 0..canvas::width(ctx) {
+                // Anti aliasing
+                let color = if ANTI_ALIASING {
+                    self.anti_alias_draw(x, y)
+                } else {
+                    self.single_sample_draw(x, y)
+                };
+
+                // Distance fog
+                canvas::write_pixel_f32(ctx, x, y, &color.to_array());
+            }
+        }
     }
 
     // Sample middle of pixel
@@ -177,24 +203,6 @@ impl Raymarcher {
         color / 4.0
     }
 
-    fn draw(&mut self, ctx: &mut Context) {
-        canvas::clear_screen(ctx);
-
-        for y in 0..canvas::height(ctx) {
-            for x in 0..canvas::width(ctx) {
-                // Anti aliasing
-                let color = if ANTI_ALIASING {
-                    self.anti_alias_draw(x, y)
-                } else {
-                    self.single_sample_draw(x, y)
-                };
-
-                // Distance fog
-                canvas::write_pixel_f32(ctx, x, y, &color.to_array());
-            }
-        }
-    }
-
     fn raymarch_color(&self, ray_origin: Vec3, ray_dir: Vec3) -> Vec3 {
         let t = self.raymarch_distance(ray_origin, ray_dir);
         if t < MAX_DISTANCE {
@@ -218,30 +226,31 @@ impl Raymarcher {
 
             t += dist;
             if t >= MAX_DISTANCE {
-                break;
+                return t;
             }
         }
+        println!("MAX STEPS REACHED");
         t
     }
 
-    fn soft_shadow(&self, ray_origin: Vec3, ray_dir: Vec3, k: f32) -> f32 {
-        let mut t = 0.0;
-        let mut shadow: f32 = 1.0;
-        for _ in 0..MAX_STEPS {
-            let pos = ray_origin + ray_dir * t;
-            let dist = self.closest_sdf(pos).unwrap().0;
-
-            if dist < SURFACE_DISTANCE {
-                return 0.0;
-            }
-
-            shadow = shadow.min(k * dist / t);
-            t += dist;
-            if t >= MAX_DISTANCE {
-                break;
+    fn closest_sdf(&self, pos: Vec3) -> Option<(f32, &dyn Surface)> {
+        let mut closest: Option<(f32, &dyn Surface)> = None;
+        for surface in self.surfaces.iter() {
+            let res = surface.sdf(pos);
+            match closest {
+                Some(c) if res >= c.0 => {}
+                _ => closest = Some((res, surface.as_ref())),
             }
         }
-        shadow
+
+        // DEBUG Light
+        // let light_sphere_res = self.debug_light.sdf(pos);
+        // match closest {
+        //     Some(c) if light_sphere_res >= c.0 => {}
+        //     _ => closest = Some((light_sphere_res, &self.debug_light)),
+        // }
+
+        closest
     }
 
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
@@ -257,7 +266,7 @@ impl Raymarcher {
         // Phon shading model
         let ambient = 0.1;
         let specular = relfeced_dir.dot(view_dir).clamp(0.0, 1.0).powf(10.0);
-        let diffuse = (light_dir.dot(normal).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+        let diffuse = 0.9 * (light_dir.dot(normal).clamp(0.0, 1.0)).clamp(0.0, 1.0);
         let fresnel = (0.1 * (1.0 + rd.dot(normal)).powf(3.0)).max(0.0);
 
         // Fog
@@ -285,7 +294,8 @@ impl Raymarcher {
         // let a = fresnel;
         // color = vec3(a, a, a);
         // color = normal;
-        // color = Vec3::ONE * (ambient);
+        // color *= (ambient + specular + diffuse) * fog;
+        // color *= shadows;
         // color *= (diffuse * fog * shadows) + ambient;
         // color *= (diffuse + ambient + specular) * shadows * fog;
         color *= (ambient + fresnel) + (specular + diffuse) * shadows;
@@ -302,32 +312,32 @@ impl Raymarcher {
         // vec3(0.0, 8.0, 8.0)
     }
 
+    fn soft_shadow(&self, ray_origin: Vec3, ray_dir: Vec3, k: f32) -> f32 {
+        let mut t = 0.0;
+        let mut shadow: f32 = 1.0;
+        for _ in 0..MAX_STEPS {
+            let pos = ray_origin + ray_dir * t;
+            let dist = self.closest_sdf(pos).unwrap().0;
+
+            if dist < SURFACE_DISTANCE {
+                return 0.0;
+            }
+
+            shadow = shadow.min(k * dist / t);
+            t += dist;
+            if t >= MAX_DISTANCE {
+                break;
+            }
+        }
+        shadow
+    }
+
     fn normal(&self, pos: Vec3) -> Vec3 {
         let center = self.closest_sdf(pos).unwrap().0;
         let x = self.closest_sdf(pos + vec3(EPSILON, 0.0, 0.0)).unwrap().0;
         let y = self.closest_sdf(pos + vec3(0.0, EPSILON, 0.0)).unwrap().0;
         let z = self.closest_sdf(pos + vec3(0.0, 0.0, EPSILON)).unwrap().0;
         (vec3(x, y, z) - center) / EPSILON
-    }
-
-    fn closest_sdf(&self, pos: Vec3) -> Option<(f32, &dyn Surface)> {
-        let mut closest: Option<(f32, &dyn Surface)> = None;
-        for surface in self.surfaces.iter() {
-            let res = surface.sdf(pos);
-            match closest {
-                Some(c) if res >= c.0 => {}
-                _ => closest = Some((res, surface.as_ref())),
-            }
-        }
-
-        // DEBUG Light
-        // let light_sphere_res = self.debug_light.sdf(pos);
-        // match closest {
-        //     Some(c) if light_sphere_res >= c.0 => {}
-        //     _ => closest = Some((light_sphere_res, &self.debug_light)),
-        // }
-
-        closest
     }
 }
 

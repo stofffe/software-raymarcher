@@ -88,6 +88,42 @@ impl Surface for Plane {
     }
 }
 
+/// Surface representing union of two surfaces
+pub struct Union {
+    surface1: Box<dyn Surface>,
+    surface2: Box<dyn Surface>,
+}
+
+impl Union {
+    pub fn new(surface1: Box<dyn Surface>, surface2: Box<dyn Surface>) -> Self {
+        Self { surface1, surface2 }
+    }
+}
+
+impl Surface for Union {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let dist1 = self.surface1.sdf(pos);
+        let dist2 = self.surface2.sdf(pos);
+
+        if dist2 < dist1 {
+            dist2
+        } else {
+            dist1
+        }
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        let dist1 = self.surface1.sdf(pos);
+        let dist2 = self.surface2.sdf(pos);
+
+        if dist2 < dist1 {
+            self.surface2.color(ray, pos, normal, light_pos)
+        } else {
+            self.surface1.color(ray, pos, normal, light_pos)
+        }
+    }
+}
+
 /// Surface representing smooth union of two surfaces
 /// k is smoothing distance
 pub struct SmoothUnion {
@@ -119,10 +155,11 @@ impl Surface for SmoothUnion {
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         let dist1 = self.surface1.sdf(pos);
         let dist2 = self.surface2.sdf(pos);
-        let p = f32::clamp(0.5 + 0.5 * (dist1 - dist2) / self.k, 0.0, 1.0);
+        let p = (0.5 + 0.5 * (dist1 - dist2) / self.k).clamp(0.0, 1.0);
 
         let color1 = self.surface1.color(ray, pos, normal, light_pos);
         let color2 = self.surface2.color(ray, pos, normal, light_pos);
+
         interpolate_vec3(color1, color2, p)
     }
 }
@@ -182,34 +219,6 @@ pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
 //     // let new_pos = (mat * vec4(pos.x, pos.y, pos.z, 0.0)).xyz();
 // }
 //
-// /// Surface representing union of two surfaces
-// pub struct Union {
-//     surface1: Box<dyn Surface>,
-//     surface2: Box<dyn Surface>,
-// }
-//
-// impl Union {
-//     pub fn new(surface1: Box<dyn Surface>, surface2: Box<dyn Surface>) -> Self {
-//         Self { surface1, surface2 }
-//     }
-// }
-//
-// impl Surface for Union {
-//     fn sdf(&self, pos: Vec3) -> Vec4 {
-//         let surf1 = self.surface1.sdf(pos);
-//         let surf2 = self.surface2.sdf(pos);
-//         let dist1 = surf1.w;
-//         let dist2 = surf2.w;
-//         let col1 = surf1.xyz();
-//         let col2 = surf2.xyz();
-//
-//         if dist2 < dist1 {
-//             vec4(col2.x, col2.y, col2.z, dist2)
-//         } else {
-//             vec4(col1.x, col1.y, col1.z, dist1)
-//         }
-//     }
-// }
 //
 // /// Surface representing subtraction of two surfaces
 // pub struct Subtraction {
