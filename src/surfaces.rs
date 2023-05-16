@@ -1,4 +1,5 @@
 use glam::Vec3;
+use noise::{NoiseFn, Perlin};
 
 use crate::materials::Material;
 
@@ -30,6 +31,77 @@ impl Sphere {
 impl Surface for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
         Vec3::distance(pos, self.center) - self.radius
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
+pub struct PerlinSphere {
+    pub center: Vec3,
+    radius: f32,
+    material: Box<dyn Material>,
+    perlin: Perlin,
+    intensity: f32,
+}
+
+impl PerlinSphere {
+    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Box<dyn Material>) -> Self {
+        let perlin = Perlin::new(radius as u32);
+        Self {
+            center,
+            radius,
+            material,
+            perlin,
+            intensity,
+        }
+    }
+}
+
+impl Surface for PerlinSphere {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let offset = self.perlin.get([pos.x as f64, pos.y as f64, pos.z as f64]) as f32;
+        Vec3::distance(pos, self.center) - self.radius + offset * self.intensity
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
+pub struct PertrubedSphere {
+    pub center: Vec3,
+    radius: f32,
+    material: Box<dyn Material>,
+    intensity: f32,
+    phase_shift: f32,
+}
+
+impl PertrubedSphere {
+    pub fn new(
+        center: Vec3,
+        radius: f32,
+        intensity: f32,
+        phase_shift: f32,
+        material: Box<dyn Material>,
+    ) -> Self {
+        Self {
+            center,
+            radius,
+            material,
+            intensity,
+            phase_shift,
+        }
+    }
+}
+
+impl Surface for PertrubedSphere {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let c = self.intensity;
+        let q = self.phase_shift;
+        let offset = c * (q + pos.x).sin() * (q + pos.y).sin() * (q + pos.z).sin();
+        Vec3::distance(pos, self.center) - self.radius + offset
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {

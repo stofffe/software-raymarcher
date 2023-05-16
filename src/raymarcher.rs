@@ -10,31 +10,27 @@ use pixel_renderer::{
     Context, KeyCode,
 };
 
-// const WIDTH: u32 = 512;
-// const HEIGHT: u32 = 512;
+const WIDTH: u32 = 512;
+const HEIGHT: u32 = 512;
 
-const WIDTH: u32 = 1920;
-const HEIGHT: u32 = 1080;
-
-const INITAL_CAMERA_POS: Vec3 = vec3(0.0, 2.5, -5.0);
+// const WIDTH: u32 = 1920;
+// const HEIGHT: u32 = 1080;
 
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
 const SURFACE_DISTANCE: f32 = 0.0001;
 const EPSILON: f32 = SURFACE_DISTANCE / 10.0; // should be smaller than surface distance
 const MAX_DISTANCE: f32 = 50.0;
-const MAX_STEPS: u32 = 1000;
+const MAX_STEPS: u32 = 5000;
 
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
-const DIFFUSE: bool = true;
-const DISTANCE_FOG: bool = true;
-// const SHADOWS: Shadows = Shadows::Soft(128.0);
+const SHADOWS: Shadows = Shadows::Soft(16.0);
 // const SHADOWS: Shadows = Shadows::None;
-const SHADOWS: Shadows = Shadows::Hard;
-const SHADOWS_FIRST_STEP: f32 = 0.1;
+// const SHADOWS: Shadows = Shadows::Hard;
+const SHADOWS_FIRST_STEP: f32 = 0.005;
 
 enum Shadows {
     None,
@@ -83,8 +79,8 @@ impl Callbacks for Raymarcher {
 }
 
 impl Raymarcher {
-    pub fn new(surfaces: Vec<Box<dyn Surface>>, light_pos: Vec3) -> Self {
-        let camera_pos = INITAL_CAMERA_POS;
+    pub fn new(surfaces: Vec<Box<dyn Surface>>, light_pos: Vec3, init_camera_pos: Vec3) -> Self {
+        let camera_pos = init_camera_pos;
         let camera_rot = 0.0;
         let default_material = Box::new(Unlit::new(WHITE));
         let debug_light = Sphere::new(light_pos, 0.1, default_material);
@@ -274,19 +270,10 @@ impl Raymarcher {
         let fog = 1.0 - distance_surface / MAX_DISTANCE;
 
         // Shadows
-        let shadows = match SHADOWS {
-            Shadows::Hard => {
-                let light_dist = (self.light_pos - pos).length();
-                let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
-                if dist < light_dist {
-                    0.0
-                } else {
-                    1.0
-                }
-            }
-            Shadows::Soft(_) => {
-                self.soft_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir, 16.0)
-            }
+        #[rustfmt::skip]
+        let shadow = match SHADOWS {
+            Shadows::Hard => self.hard_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir),
+            Shadows::Soft(k) => self.soft_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir, k),
             Shadows::None => 1.0,
         };
 
@@ -298,7 +285,7 @@ impl Raymarcher {
         // color *= shadows;
         // color *= (diffuse * fog * shadows) + ambient;
         // color *= (diffuse + ambient + specular) * shadows * fog;
-        color *= (ambient + fresnel) + (specular + diffuse) * shadows;
+        color *= (ambient + fresnel) + (specular + diffuse) * shadow;
         color *= fog;
 
         // Gamma correction
@@ -312,24 +299,47 @@ impl Raymarcher {
         // vec3(0.0, 8.0, 8.0)
     }
 
-    fn soft_shadow(&self, ray_origin: Vec3, ray_dir: Vec3, k: f32) -> f32 {
+    /// Ray marches towards the light
+    /// If something is between, return 0 otherwise 1
+    fn hard_shadow(&self, ray_origin: Vec3, ray_dir: Vec3) -> f32 {
+        let light_dist = (self.light_pos - ray_origin).length();
+        let dist = self.raymarch_distance(ray_origin, ray_dir);
+
+        if dist < light_dist {
+            0.0
+        } else {
+            1.0
+        }
+    }
+
+    /// Raymarch towards the light
+    /// If something is between, return 0 otherwise 1
+    /// If nothing blocks, calculate penumbra soft shadow
+    fn soft_shadow(&self, ro: Vec3, rd: Vec3, k: f32) -> f32 {
+        let light_dist = (self.light_pos - ro).length();
+
         let mut t = 0.0;
         let mut shadow: f32 = 1.0;
         for _ in 0..MAX_STEPS {
-            let pos = ray_origin + ray_dir * t;
+            // If we pass the light return white
+            if t >= light_dist {
+                return shadow;
+            }
+
+            let pos = ro + rd * t;
             let dist = self.closest_sdf(pos).unwrap().0;
 
+            // If we hit something before reaching the light return black
             if dist < SURFACE_DISTANCE {
                 return 0.0;
             }
 
+            // Calculate shadow and t
             shadow = shadow.min(k * dist / t);
             t += dist;
-            if t >= MAX_DISTANCE {
-                break;
-            }
         }
-        shadow
+        println!("REACHED MAX STEPS");
+        1.0
     }
 
     fn normal(&self, pos: Vec3) -> Vec3 {

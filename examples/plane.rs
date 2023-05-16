@@ -15,6 +15,7 @@ fn main() {
         // Box::new(Plane::new(vec3(0.0,-1.0,0.0), -1.0, Box::new(Shaded::new(Box::new(Unlit::new(BLUE))))))
     ];
     let light_pos = vec3(-2.0, 1.0, -2.0);
-    let app = Raymarcher::new(surfaces, light_pos);
+    let camera_pos = vec3(0.0, 1.0, -5.0);
+    let app = Raymarcher::new(surfaces, light_pos, camera_pos);
     pixel_renderer::app::run(app)
 }

@@ -1,12 +1,11 @@
-use glam::{vec3, Vec3};
+use glam::vec3;
 use raymarching::{
     materials::{Textured, Unlit},
     raymarcher::{Raymarcher, BLUE, GREEN, RED, WHITE, YELLOW},
-    surfaces::{Plane, SmoothUnion, Sphere, Surface, Union},
+    surfaces::{Plane, SmoothUnion, Sphere, Surface},
 };
 
 fn main() {
-    let light_pos = vec3(2.0, 2.0, -3.0);
     #[rustfmt::skip]
     let surfaces: Vec<Box<dyn Surface>> = vec![
         // Walls and floor
@@ -32,6 +31,8 @@ fn main() {
         )),
         // Box::new(Sphere::new(light_pos, 0.2, Box::new(Unlit::new(WHITE)))),
     ];
-    let app = Raymarcher::new(surfaces, light_pos);
+    let light_pos = vec3(2.0, 2.0, -3.0);
+    let camera_pos = vec3(0.0, 3.0, -5.0);
+    let app = Raymarcher::new(surfaces, light_pos, camera_pos);
     pixel_renderer::app::run(app)
 }

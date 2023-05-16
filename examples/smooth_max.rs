@@ -19,6 +19,7 @@ fn main() {
         1.0,
     ))];
     let light_pos = vec3(1.0, 1.0, -1.0);
-    let app = Raymarcher::new(surfaces, light_pos);
+    let camera_pos = vec3(0.0, 0.0, -5.0);
+    let app = Raymarcher::new(surfaces, light_pos, camera_pos);
     pixel_renderer::app::run(app)
 }
