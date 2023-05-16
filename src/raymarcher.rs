@@ -3,7 +3,7 @@ use crate::{
     surfaces::{Sphere, Surface},
 };
 use core::f32;
-use glam::{vec3, vec4, Mat3, Vec3, Vec4Swizzles};
+use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard, media},
@@ -40,7 +40,7 @@ enum Shadows {
     Soft(f32),
 }
 
-pub const INDIRECT_LIGHT: f32 = 0.1;
+pub const AMBIENT_LIGHT: f32 = 0.1;
 
 pub const RED: Vec3 = vec3(1.0, 0.0, 0.0);
 pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
@@ -136,7 +136,7 @@ impl Raymarcher {
         if keyboard::key_pressed(ctx, KeyCode::Left) {
             self.light_pos.x -= CAMERA_MOVE_SPEED * dt;
         }
-        self.debug_light.pos = self.light_pos;
+        self.debug_light.center = self.light_pos;
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
@@ -146,15 +146,19 @@ impl Raymarcher {
         }
     }
 
+    fn get_screen_pos(&self, x: u32, y: u32, offset: Vec2) -> Vec3 {
+        vec3(
+            x as f32 - WIDTH as f32 / 2.0 + offset.x,
+            -(y as f32 - HEIGHT as f32 / 2.0) + offset.y,
+            FOCAL_LENGTH,
+        )
+    }
+
     // Sample middle of pixel
     fn single_sample_draw(&self, x: u32, y: u32) -> Vec3 {
         let rot_mat = Mat3::from_rotation_y(self.camera_rot);
         // Sample single point
-        let screen_pos = vec3(
-            x as f32 - WIDTH as f32 / 2.0,
-            y as f32 - HEIGHT as f32 / 2.0,
-            FOCAL_LENGTH,
-        );
+        let screen_pos = self.get_screen_pos(x, y, Vec2::ZERO);
         let dir = (rot_mat * screen_pos).normalize();
         self.raymarch_color(self.camera_pos, dir)
     }
@@ -166,11 +170,7 @@ impl Raymarcher {
 
         let e = vec4(0.125, -0.125, 0.375, -0.375);
         for offset in [e.xz(), e.yw(), e.wx(), e.zy()] {
-            let screen_pos = vec3(
-                (x as f32 - WIDTH as f32 / 2.0) + offset.x,
-                (y as f32 - HEIGHT as f32 / 2.0) + offset.y,
-                FOCAL_LENGTH,
-            );
+            let screen_pos = self.get_screen_pos(x, y, offset);
             let dir = (rot_mat * screen_pos).normalize();
             color += self.raymarch_color(self.camera_pos, dir);
         }
@@ -190,7 +190,6 @@ impl Raymarcher {
                 };
 
                 // Distance fog
-
                 canvas::write_pixel_f32(ctx, x, y, &color.to_array());
             }
         }
@@ -248,47 +247,49 @@ impl Raymarcher {
     fn hit(&self, rd: Vec3, pos: Vec3) -> Vec3 {
         let normal = self.normal(pos).normalize();
         let light_dir = (self.light_pos - pos).normalize();
+        let relfeced_dir = reflect(-light_dir, normal);
+        let view_dir = -rd.normalize();
 
         // Color
         let (_, material) = self.closest_sdf(pos).unwrap();
         let mut color = material.color(rd, pos, normal, self.light_pos);
 
-        // Diffuse
-        let mut diffuse = 1.0;
-        if DIFFUSE {
-            // let light_dir = pos - self.light_pos;
-            diffuse = 1.0 - Vec3::dot(normal, light_dir).max(0.0);
-        }
+        // Phon shading model
+        let ambient = 0.1;
+        let specular = relfeced_dir.dot(view_dir).clamp(0.0, 1.0).powf(10.0);
+        let diffuse = (light_dir.dot(normal).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+        let fresnel = (0.1 * (1.0 + rd.dot(normal)).powf(3.0)).max(0.0);
 
         // Fog
-        let mut fog = 1.0;
-        if DISTANCE_FOG {
-            let distance_surface = (self.camera_pos - pos).length();
-            fog = 1.0 - distance_surface / MAX_DISTANCE;
-        }
+        let distance_surface = (self.camera_pos - pos).length();
+        let fog = 1.0 - distance_surface / MAX_DISTANCE;
 
         // Shadows
-        let mut shadows = 1.0;
-        match SHADOWS {
+        let shadows = match SHADOWS {
             Shadows::Hard => {
                 let light_dist = (self.light_pos - pos).length();
                 let dist = self.raymarch_distance(pos + light_dir * 0.01, light_dir);
                 if dist < light_dist {
-                    shadows = 0.0;
-                    // color *= 0.0;
+                    0.0
+                } else {
+                    1.0
                 }
             }
             Shadows::Soft(_) => {
-                let shadow =
-                    self.soft_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir, 16.0);
-                shadows = shadow;
-                // color *= shadow;
+                self.soft_shadow(pos + light_dir * SHADOWS_FIRST_STEP, light_dir, 16.0)
             }
-            Shadows::None => {}
-        }
+            Shadows::None => 1.0,
+        };
 
         // Apply shading
-        color *= (diffuse * fog * shadows) + INDIRECT_LIGHT;
+        // let a = fresnel;
+        // color = vec3(a, a, a);
+        // color = normal;
+        // color = Vec3::ONE * (ambient);
+        // color *= (diffuse * fog * shadows) + ambient;
+        // color *= (diffuse + ambient + specular) * shadows * fog;
+        color *= (ambient + fresnel) + (specular + diffuse) * shadows;
+        color *= fog;
 
         // Gamma correction
         color = color.powf(0.4545);
@@ -303,9 +304,9 @@ impl Raymarcher {
 
     fn normal(&self, pos: Vec3) -> Vec3 {
         let center = self.closest_sdf(pos).unwrap().0;
-        let x = self.closest_sdf(pos - vec3(EPSILON, 0.0, 0.0)).unwrap().0;
-        let y = self.closest_sdf(pos - vec3(0.0, EPSILON, 0.0)).unwrap().0;
-        let z = self.closest_sdf(pos - vec3(0.0, 0.0, EPSILON)).unwrap().0;
+        let x = self.closest_sdf(pos + vec3(EPSILON, 0.0, 0.0)).unwrap().0;
+        let y = self.closest_sdf(pos + vec3(0.0, EPSILON, 0.0)).unwrap().0;
+        let z = self.closest_sdf(pos + vec3(0.0, 0.0, EPSILON)).unwrap().0;
         (vec3(x, y, z) - center) / EPSILON
     }
 
@@ -328,6 +329,10 @@ impl Raymarcher {
 
         closest
     }
+}
+
+fn reflect(incident: Vec3, normal: Vec3) -> Vec3 {
+    incident - 2.0 * normal.dot(incident) * normal
 }
 
 // struct HitInfo {

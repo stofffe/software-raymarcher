@@ -12,15 +12,15 @@ pub trait Surface {
 // Surface representing a sphere defined by position and radius
 // TODO pos should be represented using translation?
 pub struct Sphere {
-    pub pos: Vec3,
+    pub center: Vec3,
     radius: f32,
     material: Box<dyn Material>,
 }
 
 impl Sphere {
-    pub fn new(pos: Vec3, radius: f32, material: Box<dyn Material>) -> Self {
+    pub fn new(center: Vec3, radius: f32, material: Box<dyn Material>) -> Self {
         Self {
-            pos,
+            center,
             radius,
             material,
         }
@@ -29,7 +29,7 @@ impl Sphere {
 
 impl Surface for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
-        Vec3::distance(pos, self.pos) - self.radius
+        Vec3::distance(pos, self.center) - self.radius
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {

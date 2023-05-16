@@ -1,7 +1,7 @@
 use glam::{vec3, Vec3};
 use image::{DynamicImage, GenericImageView, Pixel};
 
-use crate::raymarcher::INDIRECT_LIGHT;
+use crate::raymarcher::AMBIENT_LIGHT;
 
 pub trait Material {
     // TODO lights
