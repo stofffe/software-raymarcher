@@ -27,9 +27,9 @@ const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
-const SHADOWS: Shadows = Shadows::Soft(16.0);
+// const SHADOWS: Shadows = Shadows::Soft(16.0);
+const SHADOWS: Shadows = Shadows::Hard;
 // const SHADOWS: Shadows = Shadows::None;
-// const SHADOWS: Shadows = Shadows::Hard;
 const SHADOWS_FIRST_STEP: f32 = 0.005;
 
 enum Shadows {
@@ -144,7 +144,7 @@ impl Raymarcher {
 
         // Media
         if keyboard::key_just_pressed(ctx, KeyCode::P) {
-            let path = "outputs/27.png";
+            let path = "outputs/28.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("saved screenshot to {}", path);
         }
@@ -215,7 +215,7 @@ impl Raymarcher {
             let res = self.closest_sdf(pos).unwrap();
             let dist = res.0;
 
-            if dist < SURFACE_DISTANCE {
+            if dist.abs() < SURFACE_DISTANCE {
                 return t;
                 // return self.hit(ray_dir, pos);
             }
@@ -330,7 +330,7 @@ impl Raymarcher {
             let dist = self.closest_sdf(pos).unwrap().0;
 
             // If we hit something before reaching the light return black
-            if dist < SURFACE_DISTANCE {
+            if dist.abs() < SURFACE_DISTANCE {
                 return 0.0;
             }
 
