@@ -21,14 +21,14 @@ const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 const SURFACE_DISTANCE: f32 = 0.0001;
 const EPSILON: f32 = SURFACE_DISTANCE / 10.0; // should be smaller than surface distance
 const MAX_DISTANCE: f32 = 50.0;
-const MAX_STEPS: u32 = 5000;
+const MAX_STEPS: u32 = 1000;
 
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
 const ANTI_ALIASING: bool = true;
-// const SHADOWS: Shadows = Shadows::Soft(16.0);
-const SHADOWS: Shadows = Shadows::Hard;
+const SHADOWS: Shadows = Shadows::Soft(16.0);
+// const SHADOWS: Shadows = Shadows::Hard;
 // const SHADOWS: Shadows = Shadows::None;
 const SHADOWS_FIRST_STEP: f32 = 0.005;
 
@@ -212,12 +212,10 @@ impl Raymarcher {
         let mut t = 0.0;
         for _ in 0..MAX_STEPS {
             let pos = ray_origin + ray_dir * t;
-            let res = self.closest_sdf(pos).unwrap();
-            let dist = res.0;
+            let (dist, _) = self.closest_sdf(pos).unwrap();
 
-            if dist.abs() < SURFACE_DISTANCE {
+            if dist.abs() < SURFACE_DISTANCE && dist.is_sign_positive() {
                 return t;
-                // return self.hit(ray_dir, pos);
             }
 
             t += dist;
@@ -225,7 +223,7 @@ impl Raymarcher {
                 return t;
             }
         }
-        println!("MAX STEPS REACHED");
+        println!("DISTANCE: MAX STEPS REACHED");
         t
     }
 
@@ -327,10 +325,10 @@ impl Raymarcher {
             }
 
             let pos = ro + rd * t;
-            let dist = self.closest_sdf(pos).unwrap().0;
+            let (dist, _) = self.closest_sdf(pos).unwrap();
 
             // If we hit something before reaching the light return black
-            if dist.abs() < SURFACE_DISTANCE {
+            if dist.abs() < SURFACE_DISTANCE && dist.is_sign_positive() {
                 return 0.0;
             }
 
@@ -338,7 +336,7 @@ impl Raymarcher {
             shadow = shadow.min(k * dist / t);
             t += dist;
         }
-        println!("REACHED MAX STEPS");
+        println!("SOFT SHADOW: REACHED MAX STEPS");
         1.0
     }
 

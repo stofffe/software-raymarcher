@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{vec3, Vec3};
 use noise::{NoiseFn, Perlin};
 
 use crate::materials::Material;
@@ -31,77 +31,6 @@ impl Sphere {
 impl Surface for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
         Vec3::distance(pos, self.center) - self.radius
-    }
-
-    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
-        self.material.color(ray, pos, normal, light_pos)
-    }
-}
-
-pub struct PerlinSphere {
-    pub center: Vec3,
-    radius: f32,
-    material: Box<dyn Material>,
-    perlin: Perlin,
-    intensity: f32,
-}
-
-impl PerlinSphere {
-    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Box<dyn Material>) -> Self {
-        let perlin = Perlin::new(radius as u32);
-        Self {
-            center,
-            radius,
-            material,
-            perlin,
-            intensity,
-        }
-    }
-}
-
-impl Surface for PerlinSphere {
-    fn sdf(&self, pos: Vec3) -> f32 {
-        let offset = self.perlin.get([pos.x as f64, pos.y as f64, pos.z as f64]) as f32;
-        Vec3::distance(pos, self.center) - self.radius + offset * self.intensity
-    }
-
-    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
-        self.material.color(ray, pos, normal, light_pos)
-    }
-}
-
-pub struct PertrubedSphere {
-    pub center: Vec3,
-    radius: f32,
-    material: Box<dyn Material>,
-    intensity: f32,
-    phase_shift: f32,
-}
-
-impl PertrubedSphere {
-    pub fn new(
-        center: Vec3,
-        radius: f32,
-        intensity: f32,
-        phase_shift: f32,
-        material: Box<dyn Material>,
-    ) -> Self {
-        Self {
-            center,
-            radius,
-            material,
-            intensity,
-            phase_shift,
-        }
-    }
-}
-
-impl Surface for PertrubedSphere {
-    fn sdf(&self, pos: Vec3) -> f32 {
-        let c = self.intensity;
-        let q = self.phase_shift;
-        let offset = c * (q + pos.x).sin() * (q + pos.y).sin() * (q + pos.z).sin();
-        Vec3::distance(pos, self.center) - self.radius + offset
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
@@ -233,6 +162,137 @@ impl Surface for SmoothUnion {
         let color2 = self.surface2.color(ray, pos, normal, light_pos);
 
         interpolate_vec3(color1, color2, p)
+    }
+}
+
+pub struct PerlinSphere {
+    pub center: Vec3,
+    radius: f32,
+    material: Box<dyn Material>,
+    perlin: Perlin,
+    intensity: f32,
+}
+
+impl PerlinSphere {
+    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Box<dyn Material>) -> Self {
+        let perlin = Perlin::new(radius as u32);
+        Self {
+            center,
+            radius,
+            material,
+            perlin,
+            intensity,
+        }
+    }
+}
+
+impl Surface for PerlinSphere {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let offset = self.perlin.get([pos.x as f64, pos.y as f64, pos.z as f64]) as f32;
+        Vec3::distance(pos, self.center) - self.radius + offset * self.intensity
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
+pub struct PertrubedSphere {
+    pub center: Vec3,
+    radius: f32,
+    material: Box<dyn Material>,
+    intensity: f32,
+    phase_shift: f32,
+}
+
+impl PertrubedSphere {
+    pub fn new(
+        center: Vec3,
+        radius: f32,
+        intensity: f32,
+        phase_shift: f32,
+        material: Box<dyn Material>,
+    ) -> Self {
+        Self {
+            center,
+            radius,
+            material,
+            intensity,
+            phase_shift,
+        }
+    }
+}
+
+impl Surface for PertrubedSphere {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let c = self.intensity;
+        let q = self.phase_shift;
+        let offset = c * (q + pos.x).sin() * (q + pos.y).sin() * (q + pos.z).sin();
+        Vec3::distance(pos, self.center) - self.radius + offset
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
+    }
+}
+
+pub struct Fractal {
+    material: Box<dyn Material>,
+    power: f32,
+}
+
+impl Fractal {
+    pub fn new(power: f32, material: Box<dyn Material>) -> Self {
+        Self { power, material }
+    }
+}
+
+const STEPS: usize = 20;
+
+impl Surface for Fractal {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let mut z = pos;
+        let mut dr = 1.0;
+        let mut r = 0.0;
+        let mut iterations = 0;
+
+        for i in 0..STEPS {
+            r = z.length();
+            iterations = i;
+
+            if r > 4.0 {
+                // let mut dst = 0.5 * r.log2() * r / dr;
+                // dst /= iterations as f32 + 1.0;
+                // println!("{r} > 4.0 dst: {dst}");
+                break;
+            }
+
+            let mut phi = (pos.y / pos.x).atan();
+            let mut theta = (pos.z / r).acos();
+            dr = r.powf(self.power - 1.0) * self.power + 1.0;
+
+            let zr = r.powf(self.power);
+            theta *= self.power;
+            phi *= self.power;
+
+            z = zr
+                * vec3(
+                    theta.sin() * phi.cos(),
+                    phi.sin() * theta.sin(),
+                    theta.cos(),
+                );
+
+            z += pos;
+        }
+        let dst = 0.5 * r.log10() * r / dr;
+        // if dst < 0.1 {
+        //     println!("SMALLER")
+        // }
+        dst
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.material.color(ray, pos, normal, light_pos)
     }
 }
 
