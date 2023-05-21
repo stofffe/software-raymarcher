@@ -60,7 +60,7 @@ pub struct Raymarcher {
 
 impl Callbacks for Raymarcher {
     fn update(&mut self, ctx: &mut Context, dt: f32) -> bool {
-        // println!("{dt}");
+        println!("{dt}");
 
         self.input(ctx, dt);
         self.draw(ctx);
@@ -223,7 +223,7 @@ impl Raymarcher {
                 return t;
             }
         }
-        println!("DISTANCE: MAX STEPS REACHED");
+        // println!("DISTANCE: MAX STEPS REACHED");
         t
     }
 
@@ -336,7 +336,7 @@ impl Raymarcher {
             shadow = shadow.min(k * dist / t);
             t += dist;
         }
-        println!("SOFT SHADOW: REACHED MAX STEPS");
+        // println!("SOFT SHADOW: REACHED MAX STEPS");
         1.0
     }
 
