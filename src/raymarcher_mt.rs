@@ -1,12 +1,18 @@
 use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
-use noise::{NoiseFn, Perlin};
+use noise::NoiseFn;
 use rayon::prelude::*;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 
 use pixel_renderer::{
     app::{Callbacks, Config},
     cmd::{canvas, keyboard},
     Context, KeyCode,
+};
+
+use crate::{
+    materials::Material,
+    surfaces::Surface,
+    surfaces_mt::{Surf, SurfList},
 };
 
 enum Shadows {
@@ -46,17 +52,17 @@ const ANTI_ALIASING: Antialiasing = Antialiasing::AAx4;
 // const THREADING: Threading = Threading::MSPC;
 // const THREADING: Threading = Threading::LineMSPC(64);
 // const THREADING: Threading = Threading::ChunkMut();
-const THREADING: Threading = Threading::LineChunkMut(64);
+const THREADING: Threading = Threading::LineChunkMut(512);
 
 const SHADOWS: Shadows = Shadows::Soft(16.0);
 // const SHADOWS: Shadows = Shadows::Hard;
 // const SHADOWS: Shadows = Shadows::None;
 
 pub struct Raymarcher {
+    surfaces: SurfList,
     camera_pos: Vec3,
     camera_yaw: f32,
     light_pos: Vec3,
-    perlin: Perlin,
     total_dt: f32,
     total_frames: u32,
     skips: i32,
@@ -90,20 +96,19 @@ impl Callbacks for Raymarcher {
             );
         }
 
-        // println!("dt: {}", dt);
+        println!("dt: {}", dt);
 
         false
     }
 }
 
 impl Raymarcher {
-    pub fn new(camera_pos: Vec3, light_pos: Vec3) -> Self {
-        let perlin = Perlin::new(0);
+    pub fn new(surfaces: SurfList, camera_pos: Vec3, light_pos: Vec3) -> Self {
         Self {
+            surfaces,
             camera_pos,
             camera_yaw: 0.0,
             light_pos,
-            perlin,
             total_dt: 0.0,
             total_frames: 0,
             skips: 10,
@@ -166,23 +171,38 @@ impl Raymarcher {
         // });
         let camera_pos = self.camera_pos;
         let light_pos = self.light_pos;
-        let perlin = &self.perlin;
         let rot_mat = Mat3::from_rotation_y(self.camera_yaw);
 
         match THREADING {
-            Threading::Single => draw_single_threaded(ctx, camera_pos, light_pos, rot_mat, perlin),
+            Threading::Single => {
+                draw_single_threaded(ctx, camera_pos, light_pos, rot_mat, self.surfaces.clone())
+            }
             Threading::MSPC => {
-                draw_multi_threaded_mspc(ctx, camera_pos, light_pos, rot_mat, perlin)
+                draw_multi_threaded_mspc(ctx, camera_pos, light_pos, rot_mat, self.surfaces.clone())
             }
-            Threading::LineMSPC(size) => {
-                draw_multi_threaded_line_mspc(ctx, camera_pos, light_pos, rot_mat, size, perlin)
-            }
-            Threading::ChunkMut() => {
-                draw_multi_threaded_chunkmut(ctx, camera_pos, light_pos, rot_mat, perlin)
-            }
-            Threading::LineChunkMut(size) => {
-                draw_custom_multi_line_chunkmut(ctx, camera_pos, light_pos, rot_mat, size, perlin)
-            }
+            Threading::LineMSPC(size) => draw_multi_threaded_line_mspc(
+                ctx,
+                camera_pos,
+                light_pos,
+                rot_mat,
+                size,
+                self.surfaces.clone(),
+            ),
+            Threading::ChunkMut() => draw_multi_threaded_chunkmut(
+                ctx,
+                camera_pos,
+                light_pos,
+                rot_mat,
+                self.surfaces.clone(),
+            ),
+            Threading::LineChunkMut(size) => draw_custom_multi_line_chunkmut(
+                ctx,
+                camera_pos,
+                light_pos,
+                rot_mat,
+                size,
+                &self.surfaces,
+            ),
         }
     }
 }
@@ -201,7 +221,7 @@ fn draw_pixel_aax4(
     camera_pos: Vec3,
     rot_mat: Mat3,
     light_pos: Vec3,
-    perlin: &Perlin,
+    surfaces: &[Surf],
 ) -> Vec3 {
     let mut color = Vec3::ZERO;
 
@@ -209,7 +229,7 @@ fn draw_pixel_aax4(
     for offset in [e.xz(), e.yw(), e.wx(), e.zy()] {
         let screen_pos = get_screen_pos(x, y, offset);
         let dir = (rot_mat * screen_pos).normalize();
-        color += raymarch_color(camera_pos, dir, light_pos, perlin);
+        color += raymarch_color(camera_pos, dir, light_pos, surfaces);
     }
     color / 4.0
 }
@@ -220,28 +240,28 @@ fn draw_pixel_simple(
     camera_pos: Vec3,
     rot_mat: Mat3,
     light_pos: Vec3,
-    perlin: &Perlin,
+    surfaces: &[Surf],
 ) -> Vec3 {
     let screen_pos = get_screen_pos(x, y, Vec2::ZERO);
     let dir = (rot_mat * screen_pos).normalize();
-    raymarch_color(camera_pos, dir, light_pos, perlin)
+    raymarch_color(camera_pos, dir, light_pos, surfaces)
 }
 
-fn raymarch_color(ro: Vec3, rd: Vec3, light_pos: Vec3, perlin: &Perlin) -> Vec3 {
-    let dist = raymarch(ro, rd, perlin);
+fn raymarch_color(ro: Vec3, rd: Vec3, light_pos: Vec3, surfaces: &[Surf]) -> Vec3 {
+    let dist = raymarch(ro, rd, surfaces);
     if dist < MAX_DISTANCE {
         let pos = ro + rd * dist;
-        hit(pos, rd, light_pos, ro, perlin)
+        hit(pos, rd, light_pos, ro, surfaces)
     } else {
         miss()
     }
 }
 
-fn raymarch(ro: Vec3, rd: Vec3, perlin: &Perlin) -> f32 {
+fn raymarch(ro: Vec3, rd: Vec3, surfaces: &[Surf]) -> f32 {
     let mut t = 0.0;
     for _ in 0..MAX_STEPS {
         let pos = ro + rd * t;
-        let dist = closest_sdf(pos, perlin);
+        let dist = closest_dist(pos, surfaces);
 
         if dist.abs() < SURFACE_DISTANCE && dist.is_sign_positive() {
             break;
@@ -256,8 +276,8 @@ fn raymarch(ro: Vec3, rd: Vec3, perlin: &Perlin) -> f32 {
     t
 }
 
-fn hit(pos: Vec3, rd: Vec3, light_pos: Vec3, camera_pos: Vec3, perlin: &Perlin) -> Vec3 {
-    let normal = normal(pos, perlin);
+fn hit(pos: Vec3, rd: Vec3, light_pos: Vec3, camera_pos: Vec3, surfaces: &[Surf]) -> Vec3 {
+    let normal = normal(pos, surfaces);
     let light_dir = (light_pos - pos).normalize();
     let relfeced_dir = reflect(-light_dir, normal);
     let view_dir = -rd.normalize();
@@ -275,13 +295,13 @@ fn hit(pos: Vec3, rd: Vec3, light_pos: Vec3, camera_pos: Vec3, perlin: &Perlin) 
     // Shadows
     #[rustfmt::skip]
     let shadow = match SHADOWS {
-        Shadows::Hard => hard_shadow(pos, light_pos, perlin),
-        Shadows::Soft(k) => soft_shadow(pos,light_pos, k, perlin),
+        Shadows::Hard => hard_shadow(pos, light_pos, surfaces),
+        Shadows::Soft(k) => soft_shadow(pos,light_pos, k, surfaces),
         Shadows::None => 1.0,
     };
 
     // Combine
-    let mut color = vec3(1.0, 0.0, 0.0);
+    let mut color = closest_color(rd, pos, normal, light_pos, surfaces);
     color *= (ambient + fresnel) + (specular + diffuse) * shadow;
     color *= fog;
     color
@@ -291,12 +311,12 @@ fn miss() -> Vec3 {
     vec3(0.0, 0.0, 0.0)
 }
 
-fn hard_shadow(surface_pos: Vec3, light_pos: Vec3, perlin: &Perlin) -> f32 {
+fn hard_shadow(surface_pos: Vec3, light_pos: Vec3, surfaces: &[Surf]) -> f32 {
     let light_dir = (light_pos - surface_pos).normalize();
     let light_dist = light_pos.distance(surface_pos);
     let start_pos = surface_pos + light_dir * SHADOW_STEP_DISTANCE; // start a little outside
 
-    let dist = raymarch(start_pos, light_dir, perlin);
+    let dist = raymarch(start_pos, light_dir, surfaces);
 
     if dist < light_dist {
         0.0
@@ -305,7 +325,7 @@ fn hard_shadow(surface_pos: Vec3, light_pos: Vec3, perlin: &Perlin) -> f32 {
     }
 }
 
-fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, perlin: &Perlin) -> f32 {
+fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, surfaces: &[Surf]) -> f32 {
     let light_dir = (light_pos - surface_pos).normalize();
     let light_dist = light_pos.distance(surface_pos);
 
@@ -318,7 +338,7 @@ fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, perlin: &Perlin) -> f
         }
 
         let pos = surface_pos + light_dir * t;
-        let dist = closest_sdf(pos, perlin);
+        let dist = closest_dist(pos, surfaces);
 
         // If we hit something before reaching the light return black
         if dist.abs() < SURFACE_DISTANCE {
@@ -333,15 +353,43 @@ fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, perlin: &Perlin) -> f
     1.0
 }
 
-fn normal(pos: Vec3, perlin: &Perlin) -> Vec3 {
-    let center = closest_sdf(pos, perlin);
-    let x = closest_sdf(pos + vec3(EPSILON, 0.0, 0.0), perlin);
-    let y = closest_sdf(pos + vec3(0.0, EPSILON, 0.0), perlin);
-    let z = closest_sdf(pos + vec3(0.0, 0.0, EPSILON), perlin);
+fn normal(pos: Vec3, surfaces: &[Surf]) -> Vec3 {
+    let center = closest_dist(pos, surfaces);
+    let x = closest_dist(pos + vec3(EPSILON, 0.0, 0.0), surfaces);
+    let y = closest_dist(pos + vec3(0.0, EPSILON, 0.0), surfaces);
+    let z = closest_dist(pos + vec3(0.0, 0.0, EPSILON), surfaces);
     (vec3(x, y, z) - center) / EPSILON
 }
 
-fn closest_sdf(pos: Vec3, perlin: &Perlin) -> f32 {
+fn closest_color(ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3, surfaces: &[Surf]) -> Vec3 {
+    let mut closest = MAX_DISTANCE;
+    let mut closest_surf: Option<&Surf> = None;
+    for surface in surfaces.iter() {
+        let res = surface.sdf(pos);
+        if res < closest {
+            closest = res;
+            closest_surf = Some(surface);
+        }
+    }
+    if let Some(closest_surf) = closest_surf {
+        closest_surf.color(ray, pos, normal, light_pos)
+    } else {
+        vec3(0.0, 0.0, 0.0)
+    }
+}
+
+fn closest_dist(pos: Vec3, surfaces: &[Surf]) -> f32 {
+    // return 0.0;
+    let mut closest = MAX_DISTANCE;
+    for surface in surfaces.iter() {
+        let res = surface.sdf(pos);
+        if res < closest {
+            closest = res;
+        }
+    }
+    closest
+    // closest.0
+
     // Perlin
     // let perlin_center = vec3(0.0, 0.0, 0.0);
     // let perlin_radius = 1.0;
@@ -351,23 +399,23 @@ fn closest_sdf(pos: Vec3, perlin: &Perlin) -> f32 {
     // let perlin = pos.distance(perlin_center) - perlin_radius + offset * intensity;
 
     // Sphere
-    let sphere_center = vec3(0.5, 0.0, 0.0);
-    let sphere_radius = 1.0;
-    let sphere = pos.distance(sphere_center) - sphere_radius;
-
-    // Plane
-    let plane_normal = vec3(0.0, 1.0, 0.0);
-    let h = -2.0;
-    let plane = pos.dot(plane_normal) - h;
-
-    // Subtraction
-    // let subtraction = (-sphere).max(perlin);
-
-    // subtraction
-    // sphere
-    // plane
-
-    sphere.min(plane)
+    // let sphere_center = vec3(0.5, 0.0, 0.0);
+    // let sphere_radius = 1.0;
+    // let sphere = pos.distance(sphere_center) - sphere_radius;
+    //
+    // // Plane
+    // let plane_normal = vec3(0.0, 1.0, 0.0);
+    // let h = -2.0;
+    // let plane = pos.dot(plane_normal) - h;
+    //
+    // // Subtraction
+    // // let subtraction = (-sphere).max(perlin);
+    //
+    // // subtraction
+    // // sphere
+    // // plane
+    //
+    // sphere.min(plane)
 
     // pos.distance(sphere_center) - sphere_radius
 }
@@ -380,14 +428,16 @@ fn draw_single_threaded(
     camera_pos: Vec3,
     light_pos: Vec3,
     rot_mat: Mat3,
-    perlin: &Perlin,
+    surfaces: SurfList,
 ) {
     let pixels = 0..(WIDTH * HEIGHT);
     pixels.into_iter().for_each(|i| {
         let (x, y) = (i % WIDTH, i / WIDTH);
         let color = match ANTI_ALIASING {
-            Antialiasing::None => draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, perlin),
-            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, perlin),
+            Antialiasing::None => {
+                draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, &surfaces)
+            }
+            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, &surfaces),
         };
         canvas::write_pixel_f32(ctx, x, y, &color.to_array());
     });
@@ -398,15 +448,17 @@ fn draw_multi_threaded_mspc(
     camera_pos: Vec3,
     light_pos: Vec3,
     rot_mat: Mat3,
-    perlin: &Perlin,
+    surfaces: SurfList,
 ) {
     let (tx, rx) = mpsc::channel();
     let pixels = 0..(WIDTH * HEIGHT);
     pixels.into_par_iter().for_each_with(tx, |sender, i| {
         let (x, y) = (i % WIDTH, i / WIDTH);
         let color = match ANTI_ALIASING {
-            Antialiasing::None => draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, perlin),
-            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, perlin),
+            Antialiasing::None => {
+                draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, &surfaces)
+            }
+            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, &surfaces),
         };
         sender.send((x, y, color)).unwrap()
     });
@@ -421,7 +473,7 @@ fn draw_multi_threaded_line_mspc(
     light_pos: Vec3,
     rot_mat: Mat3,
     size: u32,
-    perlin: &Perlin,
+    surfaces: SurfList,
 ) {
     let (tx, rx) = mpsc::channel();
     let pixels = 0..(WIDTH * HEIGHT);
@@ -435,10 +487,10 @@ fn draw_multi_threaded_line_mspc(
                 let (x, y) = (i % WIDTH, i / WIDTH);
                 let color = match ANTI_ALIASING {
                     Antialiasing::None => {
-                        draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, perlin)
+                        draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, &surfaces)
                     }
                     Antialiasing::AAx4 => {
-                        draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, perlin)
+                        draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, &surfaces)
                     }
                 };
                 colors.push(color);
@@ -459,14 +511,16 @@ fn draw_multi_threaded_chunkmut(
     camera_pos: Vec3,
     light_pos: Vec3,
     rot_mat: Mat3,
-    perlin: &Perlin,
+    surfaces: SurfList,
 ) {
     let pixels = canvas::pixel_ref(ctx);
     pixels.par_chunks_mut(4).enumerate().for_each(|(i, rgba)| {
         let (x, y) = (i as u32 % WIDTH, i as u32 / WIDTH);
         let color = match ANTI_ALIASING {
-            Antialiasing::None => draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, perlin),
-            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, perlin),
+            Antialiasing::None => {
+                draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, &surfaces)
+            }
+            Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, &surfaces),
         }
         .clamp(Vec3::ZERO, Vec3::ONE);
         rgba[0] = (color.x * 255.0) as u8;
@@ -481,7 +535,7 @@ fn draw_custom_multi_line_chunkmut(
     light_pos: Vec3,
     rot_mat: Mat3,
     size: u32,
-    perlin: &Perlin,
+    surfaces: &SurfList,
 ) {
     // let size = 32;
     let pixels = canvas::pixel_ref(ctx);
@@ -494,10 +548,10 @@ fn draw_custom_multi_line_chunkmut(
                 let (x, y) = (index % WIDTH, index / WIDTH);
                 let color = match ANTI_ALIASING {
                     Antialiasing::None => {
-                        draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, perlin)
+                        draw_pixel_simple(x, y, camera_pos, rot_mat, light_pos, surfaces)
                     }
                     Antialiasing::AAx4 => {
-                        draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, perlin)
+                        draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, surfaces)
                     }
                 }
                 .clamp(Vec3::ZERO, Vec3::ONE);
