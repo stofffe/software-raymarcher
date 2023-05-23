@@ -1,7 +1,12 @@
 use glam::{vec3, Vec3};
 use image::{DynamicImage, GenericImageView, Pixel};
 
-use crate::raymarcher::AMBIENT_LIGHT;
+pub const RED: Vec3 = vec3(1.0, 0.0, 0.0);
+pub const GREEN: Vec3 = vec3(0.0, 1.0, 0.0);
+pub const BLUE: Vec3 = vec3(0.0, 0.0, 1.0);
+pub const WHITE: Vec3 = vec3(1.0, 1.0, 1.0);
+pub const YELLOW: Vec3 = vec3(1.0, 1.0, 0.0);
+pub const PINK: Vec3 = vec3(1.0, 0.5, 0.5);
 
 pub trait Material {
     // TODO lights
@@ -90,7 +95,7 @@ impl Texture {
     }
 
     /// Returns the color of the pixel
-    fn sample(&self, x: f32, y: f32) -> Vec3 {
+    pub fn sample(&self, x: f32, y: f32) -> Vec3 {
         // Turn world position into texture position [0,1] range
         let mut x_scaled = x % 1.0;
         if x_scaled < 0.0 {

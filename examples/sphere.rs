@@ -1,21 +1,34 @@
+use std::sync::Arc;
+
 use glam::{vec3, Vec3};
 use raymarching::{
-    materials::Unlit,
-    raymarcher::{Raymarcher, GREEN, RED, WHITE, YELLOW},
-    surfaces::{Sphere, Surface},
+    materials::{Unlit, GREEN, RED, WHITE, YELLOW},
+    raymarcher::Raymarcher,
+    surfaces::{Sphere, SurfaceList},
 };
 
 fn main() {
-    #[rustfmt::skip]
-    let surfaces: Vec<Box<dyn Surface>> = vec![
-        Box::new(Sphere::new(Vec3::ZERO, 1.0, Box::new(Unlit::new(RED)))),
-        Box::new(Sphere::new( vec3(2.0, 0.0, 0.0), 1.0, Box::new(Unlit::new(WHITE)),)),
-        Box::new(Sphere::new( vec3(4.0, -3.0, 3.0), 1.0, Box::new(Unlit::new(GREEN)),)),
-        Box::new(Sphere::new( vec3(-2.0, 2.0, 2.0), 0.2, Box::new(Unlit::new(YELLOW)))),
-    ];
+    let surfaces: SurfaceList = Arc::new(vec![
+        Arc::new(Sphere::new(Vec3::ZERO, 1.0, Arc::new(Unlit::new(RED)))),
+        Arc::new(Sphere::new(
+            vec3(2.0, 0.0, 0.0),
+            1.0,
+            Arc::new(Unlit::new(WHITE)),
+        )),
+        Arc::new(Sphere::new(
+            vec3(4.0, -3.0, 3.0),
+            1.0,
+            Arc::new(Unlit::new(GREEN)),
+        )),
+        Arc::new(Sphere::new(
+            vec3(-2.0, 2.0, 2.0),
+            0.2,
+            Arc::new(Unlit::new(YELLOW)),
+        )),
+    ]);
     let light_pos = vec3(-2.0, 1.0, -2.0);
     let camera_pos = vec3(0.0, 0.0, -5.0);
-    let app = Raymarcher::new(surfaces, light_pos, camera_pos);
+    let app = Raymarcher::new(surfaces, camera_pos, light_pos);
     pixel_renderer::app::run(app)
 }
 
