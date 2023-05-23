@@ -8,8 +8,7 @@ pub const WHITE: Vec3 = vec3(1.0, 1.0, 1.0);
 pub const YELLOW: Vec3 = vec3(1.0, 1.0, 0.0);
 pub const PINK: Vec3 = vec3(1.0, 0.5, 0.5);
 
-pub trait Material {
-    // TODO lights
+pub trait MaterialTrait {
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3;
 }
 
@@ -24,7 +23,7 @@ impl Unlit {
     }
 }
 
-impl Material for Unlit {
+impl MaterialTrait for Unlit {
     fn color(&self, _ray: Vec3, _pos: Vec3, _normal: Vec3, _light_pos: Vec3) -> Vec3 {
         self.color
     }
@@ -33,7 +32,7 @@ impl Material for Unlit {
 /// Material that outputs the normal as a color
 pub struct Normal;
 
-impl Material for Normal {
+impl MaterialTrait for Normal {
     fn color(&self, _ray: Vec3, _pos: Vec3, normal: Vec3, _light_pos: Vec3) -> Vec3 {
         normal
     }
@@ -67,7 +66,7 @@ impl Textured {
     }
 }
 
-impl Material for Textured {
+impl MaterialTrait for Textured {
     fn color(&self, _ray: Vec3, pos: Vec3, normal: Vec3, _light_pos: Vec3) -> Vec3 {
         let x = self.texture.sample(pos.y * self.scale, pos.z * self.scale);
         let y = self.texture.sample(pos.z * self.scale, pos.x * self.scale);

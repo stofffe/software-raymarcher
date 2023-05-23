@@ -3,10 +3,11 @@ use std::sync::Arc;
 use glam::{vec3, Vec3};
 use noise::{NoiseFn, Perlin};
 
-use crate::materials::Material;
+use crate::materials::MaterialTrait;
 
 pub type Surface = Arc<dyn SurfaceTrait>;
 pub type SurfaceList = Arc<Vec<Surface>>;
+pub type Material = Arc<dyn MaterialTrait + Sync + Send>;
 
 /// Represents a surface defined by a SDF
 pub trait SurfaceTrait: Sync + Send {
@@ -15,18 +16,16 @@ pub trait SurfaceTrait: Sync + Send {
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3;
 }
 
-pub type Mat = Arc<dyn Material + Sync + Send>;
-
 // Surface representing a sphere defined by position and radius
 // TODO pos should be represented using translation?
 pub struct Sphere {
     pub center: Vec3,
     radius: f32,
-    material: Mat,
+    material: Material,
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f32, material: Mat) -> Self {
+    pub fn new(center: Vec3, radius: f32, material: Material) -> Self {
         Self {
             center,
             radius,
@@ -48,11 +47,11 @@ impl SurfaceTrait for Sphere {
 
 pub struct BoxExact {
     b: Vec3,
-    material: Mat,
+    material: Material,
 }
 
 impl BoxExact {
-    pub fn new(b: Vec3, material: Mat) -> Self {
+    pub fn new(b: Vec3, material: Material) -> Self {
         Self { b, material }
     }
 }
@@ -73,11 +72,11 @@ impl SurfaceTrait for BoxExact {
 pub struct Plane {
     normal: Vec3,
     origin_distance: f32,
-    material: Mat,
+    material: Material,
 }
 
 impl Plane {
-    pub fn new(normal: Vec3, origin_distance: f32, material: Mat) -> Self {
+    pub fn new(normal: Vec3, origin_distance: f32, material: Material) -> Self {
         let normal = normal.normalize();
         Self {
             normal,
@@ -180,13 +179,13 @@ impl SurfaceTrait for SmoothUnion {
 pub struct PerlinSphere {
     pub center: Vec3,
     radius: f32,
-    material: Mat,
+    material: Material,
     perlin: Perlin,
     intensity: f32,
 }
 
 impl PerlinSphere {
-    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Mat) -> Self {
+    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Material) -> Self {
         let perlin = Perlin::new(radius as u32);
         Self {
             center,
@@ -212,13 +211,19 @@ impl SurfaceTrait for PerlinSphere {
 pub struct PertrubedSphere {
     pub center: Vec3,
     radius: f32,
-    material: Mat,
+    material: Material,
     intensity: f32,
     phase_shift: f32,
 }
 
 impl PertrubedSphere {
-    pub fn new(center: Vec3, radius: f32, intensity: f32, phase_shift: f32, material: Mat) -> Self {
+    pub fn new(
+        center: Vec3,
+        radius: f32,
+        intensity: f32,
+        phase_shift: f32,
+        material: Material,
+    ) -> Self {
         Self {
             center,
             radius,
@@ -243,12 +248,12 @@ impl SurfaceTrait for PertrubedSphere {
 }
 
 pub struct Fractal {
-    material: Mat,
+    material: Material,
     power: f32,
 }
 
 impl Fractal {
-    pub fn new(power: f32, material: Mat) -> Self {
+    pub fn new(power: f32, material: Material) -> Self {
         Self { power, material }
     }
 }

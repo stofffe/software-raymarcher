@@ -284,6 +284,7 @@ fn hit(pos: Vec3, rd: Vec3, light_pos: Vec3, camera_pos: Vec3, surfaces: &[Surfa
     color *= (ambient + fresnel) + (specular + diffuse) * shadow;
     color *= fog;
 
+    // Gamma correction
     color = color.powf(0.4545);
 
     color
