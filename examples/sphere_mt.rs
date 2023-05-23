@@ -3,9 +3,9 @@ use std::sync::Arc;
 use glam::{vec3, Vec3};
 use raymarching::{
     materials::{Textured, Unlit},
-    raymarcher::{BLUE, RED, WHITE},
+    raymarcher::BLUE,
     raymarcher_mt::Raymarcher,
-    surfaces_mt::{Plane, Sphere, Surf, SurfList, Surface},
+    surfaces_mt::{Plane, Sphere, SurfList},
 };
 
 fn main() {
@@ -14,8 +14,8 @@ fn main() {
     #[rustfmt::skip]
     let surfaces: SurfList = Arc::new(vec![
         Arc::new(Sphere::new(Vec3::ZERO, 1.0, Arc::new(Unlit::new(BLUE)))),
+        Arc::new(Plane::new(vec3(0.0,1.0,0.0), -2.0, Arc::new(Textured::new("assets/checkerboard.jpeg").with_scale(0.5))))
         // Arc::new(Plane::new(vec3(0.0,1.0,0.0), -2.0, Arc::new(Unlit::new(WHITE))))
-        Arc::new(Plane::new(vec3(0.0,1.0,0.0), -2.0, Arc::new(Textured::new("assets/checkerboard.jpeg"))))
         // Arc::new(Sphere::new(vec3(1.0,0.0,0.0), 1.0, Arc::new(Unlit::new(BLUE)))),
         // Arc::new(Sphere::new(vec3(2.0,0.0,0.0), 1.0, Arc::new(Unlit::new(BLUE)))),
         // Arc::new(Sphere::new(vec3(3.0,0.0,0.0), 1.0, Arc::new(Unlit::new(BLUE)))),

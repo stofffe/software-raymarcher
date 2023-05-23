@@ -38,6 +38,7 @@ impl Material for Normal {
 pub struct Textured {
     texture: Texture,
     blend_sharpness: f32,
+    scale: f32,
 }
 
 impl Textured {
@@ -46,7 +47,13 @@ impl Textured {
         Self {
             texture,
             blend_sharpness: 1.0,
+            scale: 1.0,
         }
+    }
+
+    pub fn with_scale(mut self, scale: f32) -> Self {
+        self.scale = scale;
+        self
     }
 
     pub fn with_blend_sharpness(mut self, k: f32) -> Self {
@@ -57,9 +64,9 @@ impl Textured {
 
 impl Material for Textured {
     fn color(&self, _ray: Vec3, pos: Vec3, normal: Vec3, _light_pos: Vec3) -> Vec3 {
-        let x = self.texture.sample(pos.y, pos.z);
-        let y = self.texture.sample(pos.z, pos.x);
-        let z = self.texture.sample(pos.x, pos.y);
+        let x = self.texture.sample(pos.y * self.scale, pos.z * self.scale);
+        let y = self.texture.sample(pos.z * self.scale, pos.x * self.scale);
+        let z = self.texture.sample(pos.x * self.scale, pos.y * self.scale);
 
         // let mut weight = normal.abs();
         let mut weight = normal.abs().powf(self.blend_sharpness);
@@ -71,27 +78,6 @@ impl Material for Textured {
     // let color = self.texture.sample(pos.x, pos.y);
     // let color = vec3(pos.x.abs() % 1.0, pos.y.abs() % 1.0, 0.0);
 }
-
-// Material that outputs a shaded color
-// Uses phong shading
-// pub struct Shaded {
-//     texture: Box<dyn Material>,
-// }
-//
-// impl Shaded {
-//     pub fn new(texture: Box<dyn Material>) -> Self {
-//         Self { texture }
-//     }
-// }
-//
-// impl Material for Shaded {
-//     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
-//         let light_dir = pos - light_pos;
-//         let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
-//         let color = self.texture.color(ray, pos, normal, light_pos);
-//         color * (light + INDIRECT_LIGHT)
-//     }
-// }
 
 /// Uses repeating
 pub struct Texture {
@@ -167,5 +153,26 @@ impl Texture {
 //         let light_dir = pos - light_pos;
 //         let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
 //         self.color * (light + INDIRECT_LIGHT)
+//     }
+// }
+
+// Material that outputs a shaded color
+// Uses phong shading
+// pub struct Shaded {
+//     texture: Box<dyn Material>,
+// }
+//
+// impl Shaded {
+//     pub fn new(texture: Box<dyn Material>) -> Self {
+//         Self { texture }
+//     }
+// }
+//
+// impl Material for Shaded {
+//     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+//         let light_dir = pos - light_pos;
+//         let light = Vec3::dot(normal.normalize(), light_dir.normalize()).max(0.0);
+//         let color = self.texture.color(ray, pos, normal, light_pos);
+//         color * (light + INDIRECT_LIGHT)
 //     }
 // }
