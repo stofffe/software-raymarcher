@@ -44,9 +44,9 @@ const ANTI_ALIASING: Antialiasing = Antialiasing::AAx4;
 // const THREADING: Threading = Threading::ChunkMut();
 const THREADING: Threading = Threading::LineChunkMut(512);
 
-const SHADOWS: Shadows = Shadows::Soft(16.0);
+// const SHADOWS: Shadows = Shadows::Soft(16.0);
 // const SHADOWS: Shadows = Shadows::Hard;
-// const SHADOWS: Shadows = Shadows::None;
+const SHADOWS: Shadows = Shadows::None;
 
 pub struct Raymarcher {
     surfaces: SurfaceList,
