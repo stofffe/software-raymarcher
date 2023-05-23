@@ -3,7 +3,7 @@ use rayon::prelude::*;
 
 use pixel_renderer::{
     app::{Callbacks, Config},
-    cmd::{canvas, keyboard},
+    cmd::{canvas, keyboard, media, prelude::key_pressed},
     Context, KeyCode,
 };
 
@@ -19,6 +19,7 @@ enum Threading {
     ChunkMut(),
     LineChunkMut(u32),
 }
+
 enum Antialiasing {
     None,
     AAx4,
@@ -26,6 +27,8 @@ enum Antialiasing {
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
+// const WIDTH: u32 = 1920;
+// const HEIGHT: u32 = 1080;
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
 const MAX_STEPS: u32 = 1000;
@@ -37,8 +40,8 @@ const SHADOW_STEP_DISTANCE: f32 = 0.005;
 const CAMERA_MOVE_SPEED: f32 = 2.0;
 const CAMERA_ROTATE_SPEED: f32 = 1.0;
 
-const ANTI_ALIASING: Antialiasing = Antialiasing::AAx4;
-// const ANTI_ALIASING: Antialiasing = Antialiasing::None;
+// const ANTI_ALIASING: Antialiasing = Antialiasing::AAx4;
+const ANTI_ALIASING: Antialiasing = Antialiasing::None;
 
 // const THREADING: Threading = Threading::Single;
 // const THREADING: Threading = Threading::ChunkMut();
@@ -151,14 +154,17 @@ impl Raymarcher {
             self.light_pos.x -= CAMERA_MOVE_SPEED * dt;
         }
 
+        if keyboard::key_just_pressed(ctx, KeyCode::Space) {
+            let path = "outputs/31.png";
+            media::export_screenshot(ctx, path).unwrap();
+            println!("exported screenshot to {}", path);
+        }
+
         // println!("camera pos {}", self.camera_pos);
     }
 
     fn draw(&mut self, ctx: &mut Context) {
         canvas::clear_screen(ctx);
-        // pixels.into_par_iter().for_each_with(tx, |sender, value| {
-        //     sender.send(value).unwrap();
-        // });
         let camera_pos = self.camera_pos;
         let light_pos = self.light_pos;
         let rot_mat = Mat3::from_rotation_y(self.camera_yaw);

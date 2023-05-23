@@ -19,7 +19,7 @@ fn main() {
     let surfaces: SurfaceList = Arc::new(vec![
         // Union
         translated(
-            vec3(0.0, 0.0, 0.0),
+            vec3(0.0, 0.0, z_space),
             union(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -29,7 +29,7 @@ fn main() {
             ),
         ),
         translated(
-            vec3(0.0, 0.0, z_space),
+            vec3(0.0, 0.0, 0.0),
             smooth_union(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -41,7 +41,7 @@ fn main() {
         ),
         // Subtraction
         translated(
-            vec3(x_space, 0.0, 0.0),
+            vec3(x_space, 0.0, z_space),
             subtraction(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -51,7 +51,7 @@ fn main() {
             ),
         ),
         translated(
-            vec3(x_space, 0.0, z_space),
+            vec3(x_space, 0.0, 0.0),
             smooth_subtraction(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -63,7 +63,7 @@ fn main() {
         ),
         // Intersection
         translated(
-            vec3(2.0 * x_space, 0.0, 0.0),
+            vec3(2.0 * x_space, 0.0, z_space),
             intersection(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -73,7 +73,7 @@ fn main() {
             ),
         ),
         translated(
-            vec3(2.0 * x_space, 0.0, z_space),
+            vec3(2.0 * x_space, 0.0, 0.0),
             smooth_intersection(
                 translated(
                     vec3(0.0, 0.0, 0.0),
@@ -85,7 +85,7 @@ fn main() {
         ),
     ]);
     let light_pos = vec3(4.0, 2.0, -5.0);
-    let camera_pos = vec3(4.0, 4.0, -7.0);
+    let camera_pos = vec3(x_space, 6.0, -10.0);
     let app = Raymarcher::new(surfaces, camera_pos, light_pos);
     pixel_renderer::app::run(app)
 }

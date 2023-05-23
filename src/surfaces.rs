@@ -394,6 +394,37 @@ impl SurfaceTrait for Translation {
 }
 
 //
+// Repetition
+//
+
+pub struct InfRepetition {
+    period: Vec3,
+    surface: Surface,
+}
+
+impl InfRepetition {
+    pub fn new(surface: Surface, period: Vec3) -> Self {
+        Self { surface, period }
+    }
+}
+
+fn modulo(x: Vec3, y: Vec3) -> Vec3 {
+    x - y * (x / y).floor()
+}
+
+impl SurfaceTrait for InfRepetition {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let c = self.period;
+        let q = modulo(pos + 0.5 * c, c) - 0.5 * c;
+        self.surface.sdf(q)
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.surface.color(ray, pos, normal, light_pos)
+    }
+}
+
+//
 // Perlin Sphere
 //
 
