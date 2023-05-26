@@ -12,7 +12,7 @@ pub trait MaterialTrait {
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3;
 }
 
-/// Material that outputs a flat color not affected by light
+/// Material that outputs a flat color
 pub struct Unlit {
     color: Vec3,
 }
@@ -38,7 +38,7 @@ impl MaterialTrait for Normal {
     }
 }
 
-// Texture
+// Material that samples from a pixel based of world position
 pub struct Textured {
     texture: Texture,
     blend_sharpness: f32,
@@ -78,22 +78,20 @@ impl MaterialTrait for Textured {
 
         x * weight.x + y * weight.y + z * weight.z
     }
-
-    // let color = self.texture.sample(pos.x, pos.y);
-    // let color = vec3(pos.x.abs() % 1.0, pos.y.abs() % 1.0, 0.0);
 }
 
-/// Uses repeating
+/// Uses repeating if sampled outside unit quad
 pub struct Texture {
     image: DynamicImage,
 }
+
 impl Texture {
     pub fn new(path: &str) -> Self {
         let image = image::open(path).unwrap();
         Self { image }
     }
 
-    /// Returns the color of the pixel
+    /// Returns the color of the pixel at world position (x,y)
     pub fn sample(&self, x: f32, y: f32) -> Vec3 {
         // Turn world position into texture position [0,1] range
         let mut x_scaled = x % 1.0;
@@ -120,6 +118,7 @@ impl Texture {
         )
     }
 }
+
 // Material that outputs a shaded color
 // Uses phong shading
 // pub struct PhongShadedTexture {

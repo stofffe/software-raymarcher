@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use glam::{vec3, Quat, Vec3};
+use glam::{Quat, Vec3};
 use noise::{NoiseFn, Perlin};
 
 use crate::materials::MaterialTrait;
@@ -13,10 +13,8 @@ pub type Surface = Arc<dyn SurfaceTrait>;
 pub type SurfaceList = Arc<Vec<Surface>>;
 pub type Material = Arc<dyn MaterialTrait + Sync + Send>;
 
-/// Represents a surface defined by a SDF
 pub trait SurfaceTrait: Sync + Send {
     fn sdf(&self, pos: Vec3) -> f32;
-    // fn material(&self) -> &dyn Material;
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3;
 }
 
