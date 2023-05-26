@@ -4,18 +4,14 @@ use glam::vec3;
 use raymarching::{
     materials::{Textured, Unlit, RED},
     raymarcher::Raymarcher,
-    surfaces::{Plane, Sphere, SurfaceList},
+    surfaces::{plane, sphere, SurfaceList},
 };
 
 fn main() {
     let checkerboard_mat = Arc::new(Textured::new("assets/checkerboard.jpeg"));
     let surfaces: SurfaceList = Arc::new(vec![
-        Arc::new(Plane::new(vec3(0.0, 1.0, 0.0), -2.0, checkerboard_mat)),
-        Arc::new(Sphere::new(
-            vec3(0.0, 0.0, 0.0),
-            1.0,
-            Arc::new(Unlit::new(RED)),
-        )),
+        plane(vec3(0.0, 1.0, 0.0), -2.0, checkerboard_mat),
+        sphere(1.0, Arc::new(Unlit::new(RED))),
     ]);
     let light_pos = vec3(-2.0, 1.0, -2.0);
     let camera_pos = vec3(0.0, 1.0, -5.0);

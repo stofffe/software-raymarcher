@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use glam::{vec3, Vec2, Vec3};
+use glam::{vec3, Vec3};
 use raymarching::{
     materials::{Unlit, BLUE, RED},
     raymarcher::Raymarcher,
@@ -12,7 +12,6 @@ use raymarching::{
 
 fn main() {
     let x_space = 5.0;
-    let y_space = 5.0;
     let z_space = 5.0;
     let red_mat = Arc::new(Unlit::new(RED));
     let blue_mat = Arc::new(Unlit::new(BLUE));
@@ -75,11 +74,8 @@ fn main() {
         translated(
             vec3(2.0 * x_space, 0.0, 0.0),
             smooth_intersection(
-                translated(
-                    vec3(0.0, 0.0, 0.0),
-                    exact_box(vec3(2.0, 1.0, 2.0), red_mat.clone()),
-                ),
-                translated(vec3(0.0, 1.0, 0.0), sphere(1.5, blue_mat.clone())),
+                translated(vec3(0.0, 0.0, 0.0), exact_box(vec3(2.0, 1.0, 2.0), red_mat)),
+                translated(vec3(0.0, 1.0, 0.0), sphere(1.5, blue_mat)),
                 0.5,
             ),
         ),
@@ -95,7 +91,7 @@ fn translated(translation: Vec3, surface: Surface) -> Surface {
 }
 
 fn sphere(radius: f32, material: Material) -> Surface {
-    Arc::new(Sphere::new(Vec3::ZERO, radius, material))
+    Arc::new(Sphere::new(radius, material))
 }
 fn exact_box(b: Vec3, material: Material) -> Surface {
     Arc::new(BoxExact::new(b, material))

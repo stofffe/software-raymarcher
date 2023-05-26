@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use glam::vec3;
 use raymarching::{
-    materials::{Texture, Textured, Unlit, BLUE, GREEN, RED, WHITE, YELLOW},
+    materials::{Textured, Unlit, BLUE, GREEN, RED, WHITE, YELLOW},
     raymarcher::Raymarcher,
-    surfaces::{Plane, SmoothUnion, Sphere, SurfaceList},
+    surfaces::{plane, smooth_union, sphere, translation, SurfaceList},
 };
 
 fn main() {
@@ -12,48 +12,35 @@ fn main() {
     let dirt_mat = Arc::new(Textured::new("assets/dirt.jpeg"));
     let surfaces: SurfaceList = Arc::new(vec![
         // Walls and floor
-        Arc::new(SmoothUnion::new(
-            Arc::new(SmoothUnion::new(
-                Arc::new(Plane::new(
-                    vec3(1.0, 0.0, -1.0),
-                    -2.0,
-                    brick_wall_mat.clone(),
-                )),
-                Arc::new(Plane::new(vec3(-1.0, 0.0, -1.0), -2.0, brick_wall_mat)),
+        smooth_union(
+            smooth_union(
+                plane(vec3(1.0, 0.0, -1.0), -2.0, brick_wall_mat.clone()),
+                plane(vec3(-1.0, 0.0, -1.0), -2.0, brick_wall_mat),
                 0.05,
-            )),
-            Arc::new(Plane::new(vec3(0.0, 1.0, 0.0), -1.0, dirt_mat)),
+            ),
+            plane(vec3(0.0, 1.0, 0.0), -1.0, dirt_mat),
             0.1,
-        )),
-        Arc::new(Sphere::new(
-            vec3(0.0, 1.0, -1.0),
-            1.0,
-            Arc::new(Unlit::new(RED)),
-        )),
-        Arc::new(Sphere::new(
+        ),
+        translation(vec3(0.0, 1.0, -1.0), sphere(1.0, Arc::new(Unlit::new(RED)))),
+        translation(
             vec3(-0.8, 3.0, -1.0),
-            0.8,
-            Arc::new(Unlit::new(GREEN)),
-        )),
-        Arc::new(Sphere::new(
+            sphere(0.8, Arc::new(Unlit::new(GREEN))),
+        ),
+        translation(
             vec3(0.8, 2.5, -1.8),
-            0.5,
-            Arc::new(Unlit::new(BLUE)),
-        )),
-        Arc::new(SmoothUnion::new(
-            Arc::new(Sphere::new(
+            sphere(0.5, Arc::new(Unlit::new(BLUE))),
+        ),
+        smooth_union(
+            translation(
                 vec3(0.2, 4.5, -2.0),
-                0.5,
-                Arc::new(Unlit::new(YELLOW)),
-            )),
-            Arc::new(Sphere::new(
+                sphere(0.5, Arc::new(Unlit::new(YELLOW))),
+            ),
+            translation(
                 vec3(0.8, 3.5, -2.0),
-                0.3,
-                Arc::new(Unlit::new(WHITE)),
-            )),
+                sphere(0.3, Arc::new(Unlit::new(WHITE))),
+            ),
             1.0,
-        )),
-        // Box::new(Sphere::new(light_pos, 0.2, Box::new(Unlit::new(WHITE)))),
+        ),
     ]);
     let light_pos = vec3(2.0, 2.0, -3.0);
     let camera_pos = vec3(0.0, 3.0, -5.0);

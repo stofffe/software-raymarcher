@@ -24,33 +24,29 @@ pub trait SurfaceTrait: Sync + Send {
 // Sphere
 //
 
-// Surface representing a sphere defined by position and radius
-// TODO pos should be represented using translation?
 pub struct Sphere {
-    pub center: Vec3,
     radius: f32,
     material: Material,
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f32, material: Material) -> Self {
-        Self {
-            center,
-            radius,
-            material,
-        }
+    pub fn new(radius: f32, material: Material) -> Self {
+        Self { radius, material }
     }
 }
 
 impl SurfaceTrait for Sphere {
     fn sdf(&self, pos: Vec3) -> f32 {
-        Vec3::distance(pos, self.center) - self.radius
+        pos.length() - self.radius
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         // vec3(1.0, 1.0, 1.0)
         self.material.color(ray, pos, normal, light_pos)
     }
+}
+pub fn sphere(radius: f32, material: Material) -> Surface {
+    Arc::new(Sphere::new(radius, material))
 }
 
 //
@@ -78,25 +74,26 @@ impl SurfaceTrait for BoxExact {
         self.material.color(ray, pos, normal, light_pos)
     }
 }
+pub fn exact_box(b: Vec3, material: Material) -> Surface {
+    Arc::new(BoxExact::new(b, material))
+}
 
 //
 // Plane
 //
 
-/// Surface representing a plane defined by ```normal```
-/// ```origin_distance``` units from the origin
 pub struct Plane {
     normal: Vec3,
-    origin_distance: f32,
+    distance_along_normal: f32,
     material: Material,
 }
 
 impl Plane {
-    pub fn new(normal: Vec3, origin_distance: f32, material: Material) -> Self {
+    pub fn new(normal: Vec3, distance_along_normal: f32, material: Material) -> Self {
         let normal = normal.normalize();
         Self {
             normal,
-            origin_distance,
+            distance_along_normal,
             material,
         }
     }
@@ -104,19 +101,21 @@ impl Plane {
 
 impl SurfaceTrait for Plane {
     fn sdf(&self, pos: Vec3) -> f32 {
-        pos.dot(self.normal) - self.origin_distance
+        pos.dot(self.normal) - self.distance_along_normal
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         self.material.color(ray, pos, normal, light_pos)
     }
 }
+pub fn plane(normal: Vec3, distance_along_normal: f32, material: Material) -> Surface {
+    Arc::new(Plane::new(normal, distance_along_normal, material))
+}
 
 //
 // Union
 //
 
-/// Surface representing union of two surfaces
 pub struct Union {
     surface1: Arc<dyn SurfaceTrait>,
     surface2: Arc<dyn SurfaceTrait>,
@@ -144,12 +143,14 @@ impl SurfaceTrait for Union {
         }
     }
 }
+pub fn union(surface1: Surface, surface2: Surface) -> Surface {
+    Arc::new(Union::new(surface1, surface2))
+}
 //
 // Subtraction
 //
 
-/// Surface representing subtraction of two surfaces
-/// Surface1 - Surface2
+/// Subtracts surface2 from surface1
 pub struct Subtraction {
     surface1: Surface,
     surface2: Surface,
@@ -179,11 +180,13 @@ impl SurfaceTrait for Subtraction {
         }
     }
 }
+pub fn subtraction(surface1: Surface, surface2: Surface) -> Surface {
+    Arc::new(Subtraction::new(surface1, surface2))
+}
 //
 // Intersection
 //
 
-/// Surface representing intersection of two surfaces
 pub struct Intersection {
     surface1: Surface,
     surface2: Surface,
@@ -211,17 +214,18 @@ impl SurfaceTrait for Intersection {
         }
     }
 }
+pub fn intersection(surface1: Surface, surface2: Surface) -> Surface {
+    Arc::new(Intersection::new(surface1, surface2))
+}
 
 //
 // SmoothUnion
 //
 
-/// Surface representing smooth union of two surfaces
-/// k is smoothing distance
 pub struct SmoothUnion {
     surface1: Arc<dyn SurfaceTrait>,
     surface2: Arc<dyn SurfaceTrait>,
-    k: f32,
+    blend_factor: f32,
 }
 
 impl SmoothUnion {
@@ -233,7 +237,7 @@ impl SmoothUnion {
         Self {
             surface1,
             surface2,
-            k: blend_factor,
+            blend_factor,
         }
     }
 }
@@ -243,39 +247,35 @@ impl SurfaceTrait for SmoothUnion {
         let dist1 = self.surface1.sdf(pos);
         let dist2 = self.surface2.sdf(pos);
 
-        // Distance
-        let h = (0.5 + 0.5 * (dist2 - dist1) / self.k).clamp(0.0, 1.0);
-        interpolate_f32(dist2, dist1, h) - self.k * h * (1.0 - h)
-        // let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
-        // f32::min(dist1, dist2) - h * h * 0.25 / self.k
+        let h = (0.5 + 0.5 * (dist2 - dist1) / self.blend_factor).clamp(0.0, 1.0);
+        interpolate_f32(dist2, dist1, h) - self.blend_factor * h * (1.0 - h)
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         let dist1 = self.surface1.sdf(pos);
         let dist2 = self.surface2.sdf(pos);
-        let h = (0.5 + 0.5 * (dist1 - dist2) / self.k).clamp(0.0, 1.0);
+        let h = (0.5 + 0.5 * (dist1 - dist2) / self.blend_factor).clamp(0.0, 1.0);
 
         let color1 = self.surface1.color(ray, pos, normal, light_pos);
         let color2 = self.surface2.color(ray, pos, normal, light_pos);
 
         interpolate_vec3(color1, color2, h)
-        // let h = (self.k - f32::abs(dist1 - dist2)).max(0.0);
-        // vec3(h + 0.01, h + 0.01, h + 0.01);
-        // let h = (0.5 + 0.5 * (dist1 - dist2) / self.k).clamp(0.0, 1.0);
-        // vec3(h + 0.01, h + 0.01, h + 0.01)
     }
+}
+
+pub fn smooth_union(surface1: Surface, surface2: Surface, blend_factor: f32) -> Surface {
+    Arc::new(SmoothUnion::new(surface1, surface2, blend_factor))
 }
 
 //
 // Smooth Subtraction
 //
 
-/// Surface representing smooth union of two surfaces
-/// k is smoothing distance
+/// Subtracts surface2 from surface1
 pub struct SmoothSubtraction {
     surface1: Surface,
     surface2: Surface,
-    k: f32,
+    blend_factor: f32,
 }
 
 impl SmoothSubtraction {
@@ -283,7 +283,7 @@ impl SmoothSubtraction {
         Self {
             surface1,
             surface2,
-            k: blend_factor,
+            blend_factor,
         }
     }
 }
@@ -293,16 +293,16 @@ impl SurfaceTrait for SmoothSubtraction {
         let dist2 = self.surface1.sdf(pos);
         let dist1 = self.surface2.sdf(pos);
 
-        let h = (0.5 - 0.5 * (dist2 + dist1) / self.k).clamp(0.0, 1.0);
+        let h = (0.5 - 0.5 * (dist2 + dist1) / self.blend_factor).clamp(0.0, 1.0);
 
-        interpolate_f32(dist2, -dist1, h) + self.k * h * (1.0 - h)
+        interpolate_f32(dist2, -dist1, h) + self.blend_factor * h * (1.0 - h)
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         let dist1 = self.surface1.sdf(pos);
         let dist2 = self.surface2.sdf(pos);
 
-        let h = (0.5 - 0.5 * (dist2 + dist1) / self.k).clamp(0.0, 1.0);
+        let h = (0.5 - 0.5 * (dist2 + dist1) / self.blend_factor).clamp(0.0, 1.0);
 
         let color1 = self.surface1.color(ray, pos, normal, light_pos);
         let color2 = self.surface2.color(ray, pos, normal, light_pos);
@@ -310,17 +310,18 @@ impl SurfaceTrait for SmoothSubtraction {
         interpolate_vec3(color1, color2, h)
     }
 }
+pub fn smooth_subtraction(surface1: Surface, surface2: Surface, blend_factor: f32) -> Surface {
+    Arc::new(SmoothSubtraction::new(surface1, surface2, blend_factor))
+}
 
 //
 // Smooth Intersection
 //
 
-/// Surface representing smooth union of two surfaces
-/// k is smoothing distance
 pub struct SmoothIntersection {
     surface1: Surface,
     surface2: Surface,
-    k: f32,
+    blend_factor: f32,
 }
 
 impl SmoothIntersection {
@@ -328,7 +329,7 @@ impl SmoothIntersection {
         Self {
             surface1,
             surface2,
-            k: blend_factor,
+            blend_factor,
         }
     }
 }
@@ -339,21 +340,24 @@ impl SurfaceTrait for SmoothIntersection {
         let dist2 = self.surface2.sdf(pos);
 
         // Distance
-        let h = (0.5 - 0.5 * (dist2 - dist1) / self.k).clamp(0.0, 1.0);
-        interpolate_f32(dist2, dist1, h) + self.k * h * (1.0 - h)
+        let h = (0.5 - 0.5 * (dist2 - dist1) / self.blend_factor).clamp(0.0, 1.0);
+        interpolate_f32(dist2, dist1, h) + self.blend_factor * h * (1.0 - h)
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         let dist1 = self.surface1.sdf(pos);
         let dist2 = self.surface2.sdf(pos);
 
-        let h = (0.5 - 0.5 * (dist2 - dist1) / self.k).clamp(0.0, 1.0);
+        let h = (0.5 - 0.5 * (dist2 - dist1) / self.blend_factor).clamp(0.0, 1.0);
 
         let color1 = self.surface1.color(ray, pos, normal, light_pos);
         let color2 = self.surface2.color(ray, pos, normal, light_pos);
 
         interpolate_vec3(color2, color1, h)
     }
+}
+pub fn smooth_intersection(surface1: Surface, surface2: Surface, blend_factor: f32) -> Surface {
+    Arc::new(SmoothIntersection::new(surface1, surface2, blend_factor))
 }
 
 //
@@ -385,6 +389,9 @@ impl SurfaceTrait for Translation {
         self.surface.color(ray, new_pos, normal, light_pos)
     }
 }
+pub fn translation(translation: Vec3, surface: Surface) -> Surface {
+    Arc::new(Translation::new(translation, surface))
+}
 
 //
 // Rotation
@@ -411,6 +418,9 @@ impl SurfaceTrait for Rotation {
         self.surface.color(ray, pos, normal, light_pos)
     }
 }
+pub fn rotation(rotation: Quat, surface: Surface) -> Surface {
+    Arc::new(Rotation::new(rotation, surface))
+}
 
 //
 // Scale
@@ -436,9 +446,12 @@ impl SurfaceTrait for Scale {
         self.surface.color(ray, pos, normal, light_pos)
     }
 }
+pub fn scale(scale: f32, surface: Surface) -> Surface {
+    Arc::new(Scale::new(scale, surface))
+}
 
 //
-// TranslationRotationScale
+// Translation Rotation Scale
 //
 
 pub struct TranslationRotationScale {
@@ -449,7 +462,7 @@ pub struct TranslationRotationScale {
 }
 
 impl TranslationRotationScale {
-    pub fn new(surface: Surface, translation: Vec3, rotation: Quat, scale: f32) -> Self {
+    pub fn new(translation: Vec3, rotation: Quat, scale: f32, surface: Surface) -> Self {
         Self {
             surface,
             translation,
@@ -469,18 +482,31 @@ impl SurfaceTrait for TranslationRotationScale {
         self.surface.color(ray, pos, normal, light_pos)
     }
 }
+pub fn translation_rotation_scale(
+    translation: Vec3,
+    rotation: Quat,
+    scale: f32,
+    surface: Surface,
+) -> Surface {
+    Arc::new(TranslationRotationScale::new(
+        translation,
+        rotation,
+        scale,
+        surface,
+    ))
+}
 
 //
-// Repetition
+// Infinite Repetition
 //
 
-pub struct InfRepetition {
+pub struct InfiniteRepetition {
     period: Vec3,
     surface: Surface,
 }
 
-impl InfRepetition {
-    pub fn new(surface: Surface, period: Vec3) -> Self {
+impl InfiniteRepetition {
+    pub fn new(period: Vec3, surface: Surface) -> Self {
         Self { surface, period }
     }
 }
@@ -489,7 +515,7 @@ fn modulo(x: Vec3, y: Vec3) -> Vec3 {
     x - y * (x / y).floor()
 }
 
-impl SurfaceTrait for InfRepetition {
+impl SurfaceTrait for InfiniteRepetition {
     fn sdf(&self, pos: Vec3) -> f32 {
         let c = self.period;
         let q = modulo(pos + 0.5 * c, c) - 0.5 * c;
@@ -500,13 +526,15 @@ impl SurfaceTrait for InfRepetition {
         self.surface.color(ray, pos, normal, light_pos)
     }
 }
+pub fn infinite_repetition(period: Vec3, surface: Surface) -> Surface {
+    Arc::new(InfiniteRepetition::new(period, surface))
+}
 
 //
 // Perlin Sphere
 //
 
 pub struct PerlinSphere {
-    pub center: Vec3,
     radius: f32,
     material: Material,
     perlin: Perlin,
@@ -514,10 +542,9 @@ pub struct PerlinSphere {
 }
 
 impl PerlinSphere {
-    pub fn new(center: Vec3, radius: f32, intensity: f32, material: Material) -> Self {
+    pub fn new(radius: f32, intensity: f32, material: Material) -> Self {
         let perlin = Perlin::new(radius as u32);
         Self {
-            center,
             radius,
             material,
             perlin,
@@ -529,12 +556,15 @@ impl PerlinSphere {
 impl SurfaceTrait for PerlinSphere {
     fn sdf(&self, pos: Vec3) -> f32 {
         let offset = self.perlin.get([pos.x as f64, pos.y as f64, pos.z as f64]) as f32;
-        Vec3::distance(pos, self.center) - self.radius + offset * self.intensity
+        pos.length() - self.radius + offset * self.intensity
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         self.material.color(ray, pos, normal, light_pos)
     }
+}
+pub fn perlin_sphere(radius: f32, intensity: f32, material: Material) -> Surface {
+    Arc::new(PerlinSphere::new(radius, intensity, material))
 }
 
 //
@@ -542,23 +572,15 @@ impl SurfaceTrait for PerlinSphere {
 //
 
 pub struct PertrubedSphere {
-    pub center: Vec3,
     radius: f32,
-    material: Material,
     intensity: f32,
     phase_shift: f32,
+    material: Material,
 }
 
 impl PertrubedSphere {
-    pub fn new(
-        center: Vec3,
-        radius: f32,
-        intensity: f32,
-        phase_shift: f32,
-        material: Material,
-    ) -> Self {
+    pub fn new(radius: f32, intensity: f32, phase_shift: f32, material: Material) -> Self {
         Self {
-            center,
             radius,
             material,
             intensity,
@@ -572,18 +594,33 @@ impl SurfaceTrait for PertrubedSphere {
         let c = self.intensity;
         let q = self.phase_shift;
         let offset = c * (q + pos.x).sin() * (q + pos.y).sin() * (q + pos.z).sin();
-        Vec3::distance(pos, self.center) - self.radius + offset
+        pos.length() - self.radius + offset
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         self.material.color(ray, pos, normal, light_pos)
     }
 }
+pub fn pertrubed_sphere(
+    radius: f32,
+    intensity: f32,
+    phase_shift: f32,
+    material: Material,
+) -> Surface {
+    Arc::new(PertrubedSphere::new(
+        radius,
+        intensity,
+        phase_shift,
+        material,
+    ))
+}
 
-/// Interpolates two vec3 with p [0,1]
+/// p should be in range [0,1]
 pub fn interpolate_vec3(a: Vec3, b: Vec3, p: f32) -> Vec3 {
     a * (1.0 - p) + b * p
 }
+
+/// p should be in range [0,1]
 pub fn interpolate_f32(a: f32, b: f32, p: f32) -> f32 {
     a * (1.0 - p) + b * p
 }
