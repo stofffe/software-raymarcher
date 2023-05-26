@@ -9,22 +9,22 @@ use raymarching::{
 
 fn main() {
     let surfaces: SurfaceList = Arc::new(vec![
-        Arc::new(Sphere::new(Vec3::ZERO, 1.0, Arc::new(Unlit::new(RED)))),
-        Arc::new(Sphere::new(
-            vec3(2.0, 0.0, 0.0),
-            1.0,
-            Arc::new(Unlit::new(WHITE)),
-        )),
-        Arc::new(Sphere::new(
-            vec3(4.0, -3.0, 3.0),
-            1.0,
-            Arc::new(Unlit::new(GREEN)),
-        )),
-        Arc::new(Sphere::new(
-            vec3(-2.0, 2.0, 2.0),
-            0.2,
-            Arc::new(Unlit::new(YELLOW)),
-        )),
+        Arc::new(Sphere::new(Vec3::ZERO, 1.0, Arc::new(Unlit::new(WHITE)))), // Arc::new(Sphere::new(Vec3::ZERO, 1.0, Arc::new(Unlit::new(RED)))),
+                                                                             // Arc::new(Sphere::new(
+                                                                             //     vec3(2.0, 0.0, 0.0),
+                                                                             //     1.0,
+                                                                             //     Arc::new(Unlit::new(WHITE)),
+                                                                             // )),
+                                                                             // Arc::new(Sphere::new(
+                                                                             //     vec3(4.0, -3.0, 3.0),
+                                                                             //     1.0,
+                                                                             //     Arc::new(Unlit::new(GREEN)),
+                                                                             // )),
+                                                                             // Arc::new(Sphere::new(
+                                                                             //     vec3(-2.0, 2.0, 2.0),
+                                                                             //     0.2,
+                                                                             //     Arc::new(Unlit::new(YELLOW)),
+                                                                             // )),
     ]);
     let light_pos = vec3(-2.0, 1.0, -2.0);
     let camera_pos = vec3(0.0, 0.0, -5.0);

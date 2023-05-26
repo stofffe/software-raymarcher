@@ -91,7 +91,7 @@ fn main() {
 }
 
 fn translated(translation: Vec3, surface: Surface) -> Surface {
-    Arc::new(Translation::from_translation(translation, surface))
+    Arc::new(Translation::new(translation, surface))
 }
 
 fn sphere(radius: f32, material: Material) -> Surface {

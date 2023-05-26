@@ -3,7 +3,7 @@ use rayon::prelude::*;
 
 use pixel_renderer::{
     app::{Callbacks, Config},
-    cmd::{canvas, keyboard, media, prelude::key_pressed},
+    cmd::{canvas, keyboard, media},
     Context, KeyCode,
 };
 
@@ -32,7 +32,7 @@ const HEIGHT: u32 = 512;
 const FOCAL_LENGTH: f32 = HEIGHT as f32 / 2.0;
 
 const MAX_STEPS: u32 = 1000;
-const MAX_DISTANCE: f32 = 50.0;
+const MAX_DISTANCE: f32 = 100.0;
 const SURFACE_DISTANCE: f32 = 0.0001;
 const EPSILON: f32 = SURFACE_DISTANCE / 10.0; // should be smaller than surface distance
 const SHADOW_STEP_DISTANCE: f32 = 0.005;
@@ -47,9 +47,9 @@ const ANTI_ALIASING: Antialiasing = Antialiasing::None;
 // const THREADING: Threading = Threading::ChunkMut();
 const THREADING: Threading = Threading::LineChunkMut(512);
 
-// const SHADOWS: Shadows = Shadows::Soft(16.0);
+const SHADOWS: Shadows = Shadows::Soft(16.0);
 // const SHADOWS: Shadows = Shadows::Hard;
-const SHADOWS: Shadows = Shadows::None;
+// const SHADOWS: Shadows = Shadows::None;
 
 pub struct Raymarcher {
     surfaces: SurfaceList,
@@ -155,7 +155,7 @@ impl Raymarcher {
         }
 
         if keyboard::key_just_pressed(ctx, KeyCode::Space) {
-            let path = "outputs/31.png";
+            let path = "outputs/32.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("exported screenshot to {}", path);
         }
@@ -289,6 +289,7 @@ fn hit(pos: Vec3, rd: Vec3, light_pos: Vec3, camera_pos: Vec3, surfaces: &[Surfa
     let mut color = closest_color(rd, pos, normal, light_pos, surfaces);
     color *= (ambient + fresnel) + (specular + diffuse) * shadow;
     color *= fog;
+    // let mut color = Vec3::ONE * (specular + ambient);
 
     // Gamma correction
     color = color.powf(0.4545);
@@ -344,10 +345,17 @@ fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, surfaces: &[Surface])
 
 fn normal(pos: Vec3, surfaces: &[Surface]) -> Vec3 {
     let center = closest_dist(pos, surfaces);
-    let x = closest_dist(pos + vec3(EPSILON, 0.0, 0.0), surfaces);
-    let y = closest_dist(pos + vec3(0.0, EPSILON, 0.0), surfaces);
-    let z = closest_dist(pos + vec3(0.0, 0.0, EPSILON), surfaces);
-    (vec3(x, y, z) - center) / EPSILON
+    let diff = vec3(
+        closest_dist(pos + vec3(EPSILON, 0.0, 0.0), surfaces) - center,
+        closest_dist(pos + vec3(0.0, EPSILON, 0.0), surfaces) - center,
+        closest_dist(pos + vec3(0.0, 0.0, EPSILON), surfaces) - center,
+    );
+    // grad / EPSILON
+    diff.normalize()
+    // let x = closest_dist(pos + vec3(EPSILON, 0.0, 0.0), surfaces);
+    // let y = closest_dist(pos + vec3(0.0, EPSILON, 0.0), surfaces);
+    // let z = closest_dist(pos + vec3(0.0, 0.0, EPSILON), surfaces);
+    // (vec3(x, y, z) - center) / EPSILON
 }
 
 fn closest_color(

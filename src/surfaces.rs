@@ -244,10 +244,10 @@ impl SurfaceTrait for SmoothUnion {
         let dist2 = self.surface2.sdf(pos);
 
         // Distance
-        // let h = (0.5 + 0.5 * (dist2 - dist1) / self.k).clamp(0.0, 1.0);
-        // interpolate_f32(dist2, dist1, h) - self.k * h * (1.0 - h)
-        let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
-        f32::min(dist1, dist2) - h * h * 0.25 / self.k
+        let h = (0.5 + 0.5 * (dist2 - dist1) / self.k).clamp(0.0, 1.0);
+        interpolate_f32(dist2, dist1, h) - self.k * h * (1.0 - h)
+        // let h = f32::max(self.k - f32::abs(dist1 - dist2), 0.0);
+        // f32::min(dist1, dist2) - h * h * 0.25 / self.k
     }
 
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
@@ -372,13 +372,6 @@ impl Translation {
             translation,
         }
     }
-
-    pub fn from_translation(translation: Vec3, surface: Surface) -> Self {
-        Self {
-            surface,
-            translation,
-        }
-    }
 }
 
 impl SurfaceTrait for Translation {
@@ -390,6 +383,90 @@ impl SurfaceTrait for Translation {
     fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
         let new_pos = pos - self.translation;
         self.surface.color(ray, new_pos, normal, light_pos)
+    }
+}
+
+//
+// Rotation
+//
+
+pub struct Rotation {
+    rotation: Quat,
+    surface: Surface,
+}
+
+impl Rotation {
+    pub fn new(rotation: Quat, surface: Surface) -> Self {
+        Self { surface, rotation }
+    }
+}
+
+impl SurfaceTrait for Rotation {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let new_pos = self.rotation * pos;
+        self.surface.sdf(new_pos)
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.surface.color(ray, pos, normal, light_pos)
+    }
+}
+
+//
+// Scale
+//
+
+pub struct Scale {
+    scale: f32,
+    surface: Surface,
+}
+
+impl Scale {
+    pub fn new(scale: f32, surface: Surface) -> Self {
+        Self { surface, scale }
+    }
+}
+
+impl SurfaceTrait for Scale {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        self.surface.sdf(pos / self.scale) * self.scale
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.surface.color(ray, pos, normal, light_pos)
+    }
+}
+
+//
+// TranslationRotationScale
+//
+
+pub struct TranslationRotationScale {
+    surface: Surface,
+    translation: Vec3,
+    rotation: Quat,
+    scale: f32,
+}
+
+impl TranslationRotationScale {
+    pub fn new(surface: Surface, translation: Vec3, rotation: Quat, scale: f32) -> Self {
+        Self {
+            surface,
+            translation,
+            rotation,
+            scale,
+        }
+    }
+}
+
+impl SurfaceTrait for TranslationRotationScale {
+    fn sdf(&self, pos: Vec3) -> f32 {
+        let new_pos = self.rotation * (pos - self.translation);
+        self.surface.sdf(new_pos / self.scale) * self.scale
+    }
+
+    fn color(&self, ray: Vec3, pos: Vec3, normal: Vec3, light_pos: Vec3) -> Vec3 {
+        self.surface.color(ray, pos, normal, light_pos)
     }
 }
 
