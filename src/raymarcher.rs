@@ -2,8 +2,8 @@ use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
 use rayon::prelude::*;
 
 use pixel_renderer::{
-    app::{Callbacks, Config},
-    cmd::{canvas, keyboard, media},
+    app::{Callbacks},
+    cmd::{canvas, keyboard, media, mouse, window},
     Context, KeyCode,
 };
 
@@ -40,7 +40,7 @@ const EPSILON: f32 = SURFACE_DISTANCE * 0.1; // should be smaller than surface d
 const SHADOW_STEP_DISTANCE: f32 = 0.005;
 
 const CAMERA_MOVE_SPEED: f32 = 2.0;
-const CAMERA_ROTATE_SPEED: f32 = 1.0;
+const CAMERA_ROTATE_SPEED: f32 = 0.001;
 
 // const ANTI_ALIASING: Antialiasing = Antialiasing::AAx4;
 const ANTI_ALIASING: Antialiasing = Antialiasing::None;
@@ -63,21 +63,19 @@ pub struct Raymarcher {
     total_dt: f32,
     total_frames: u32,
     skips: i32,
+    paused: bool
 }
 
 impl Callbacks for Raymarcher {
-    fn config(&self) -> pixel_renderer::app::Config {
-        Config {
-            canvas_width: WIDTH,
-            canvas_height: HEIGHT,
-            resizeable: true,
-            ..Default::default()
-        }
+    fn init(&self, ctx: &mut Context) {
+        canvas::resize(ctx, WIDTH, HEIGHT);
+        window::set_cursor_enabled(ctx, false);
     }
 
     fn update(&mut self, ctx: &mut Context, dt: f32) -> bool {
         self.input(ctx, dt);
         self.draw(ctx);
+
 
         if SHOW_FRAMERATE {
             self.skips -= 1;
@@ -111,16 +109,29 @@ impl Raymarcher {
             total_dt: 0.0,
             total_frames: 0,
             skips: 10,
+            paused: false,
         }
     }
 
-    fn input(&mut self, ctx: &Context, dt: f32) {
+    fn input(&mut self, ctx: &mut Context, dt: f32) {
+        // Pause
+        if keyboard::key_just_pressed(ctx, KeyCode::Escape) {
+            self.paused = !self.paused;
+            window::set_cursor_enabled(ctx, self.paused);
+        }
+
+        if self.paused {
+            return;
+        }
+
         // Camera
         let rot_mat = Mat3::from_rotation_y(self.camera_yaw);
         let rot_mat = rot_mat.to_cols_array_2d();
         let right = vec3(rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]).normalize();
         let up = vec3(rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]).normalize();
         let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
+
+        // Movement
         if keyboard::key_pressed(ctx, KeyCode::W) {
             self.camera_pos += forward * CAMERA_MOVE_SPEED * dt;
         }
@@ -139,12 +150,14 @@ impl Raymarcher {
         if keyboard::key_pressed(ctx, KeyCode::Z) {
             self.camera_pos -= up * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::Q) {
-            self.camera_yaw -= CAMERA_ROTATE_SPEED * dt;
-        }
-        if keyboard::key_pressed(ctx, KeyCode::E) {
-            self.camera_yaw += CAMERA_ROTATE_SPEED * dt;
-        }
+        // Rotation
+        self.camera_yaw += CAMERA_ROTATE_SPEED * mouse::mouse_delta(ctx).0;
+        // if keyboard::key_pressed(ctx, KeyCode::Q) {
+        //     self.camera_yaw -= CAMERA_ROTATE_SPEED * dt;
+        // }
+        // if keyboard::key_pressed(ctx, KeyCode::E) {
+        //     self.camera_yaw += CAMERA_ROTATE_SPEED * dt;
+        // }
 
         // Light
         if keyboard::key_pressed(ctx, KeyCode::Up) {
@@ -324,7 +337,7 @@ fn raymarch(ro: Vec3, rd: Vec3, surfaces: &[Surface]) -> f32 {
             break;
         }
     }
-    println!("DISTANCE: MAX STEPS REACHED");
+    // println!("DISTANCE: MAX STEPS REACHED");
     t
 }
 
@@ -454,7 +467,7 @@ fn soft_shadow(surface_pos: Vec3, light_pos: Vec3, k: f32, surfaces: &[Surface])
         shadow = shadow.min(k * dist / t);
         t += dist;
     }
-    println!("SOFT SHADOW: REACHED MAX STEPS");
+    // println!("SOFT SHADOW: REACHED MAX STEPS");
     1.0
 }
 
