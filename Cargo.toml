@@ -1,5 +1,5 @@
 [package]
-name = "raymarching"
+name = "software_raymarcher"
 version = "0.1.0"
 edition = "2021"
 

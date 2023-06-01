@@ -1405,18 +1405,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2ff9a1f06a88b01621b7ae906ef0211290d1c8a168a15542486a8f61c0833b9"
 
 [[package]]
-name = "raymarching"
-version = "0.1.0"
-dependencies = [
- "glam",
- "image",
- "noise",
- "pixel_renderer",
- "pollster 0.3.0",
- "rayon",
-]
-
-[[package]]
 name = "rayon"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1605,6 +1593,18 @@ dependencies = [
  "wayland-client",
  "wayland-cursor",
  "wayland-protocols",
+]
+
+[[package]]
+name = "software_raymarcher"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "image",
+ "noise",
+ "pixel_renderer",
+ "pollster 0.3.0",
+ "rayon",
 ]
 
 [[package]]
