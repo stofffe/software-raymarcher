@@ -1,10 +1,6 @@
 use glam::{vec3, vec4, Mat3, Vec2, Vec3, Vec4Swizzles};
-use rayon::prelude::*;
-
-use pixel_renderer::{
-    app::{Callbacks},
-    cmd::{canvas, keyboard, media, mouse, window},
-    Context, KeyCode,
+use pixelated::{
+    canvas, input::{self, KeyCode}, media, window, Callbacks, Context
 };
 
 use crate::surfaces::{Surface, SurfaceList};
@@ -115,7 +111,7 @@ impl Raymarcher {
 
     fn input(&mut self, ctx: &mut Context, dt: f32) {
         // Pause
-        if keyboard::key_just_pressed(ctx, KeyCode::Escape) {
+        if input::key_just_pressed(ctx, KeyCode::Escape) {
             self.paused = !self.paused;
             window::set_cursor_enabled(ctx, self.paused);
         }
@@ -132,26 +128,26 @@ impl Raymarcher {
         let forward = vec3(rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]).normalize();
 
         // Movement
-        if keyboard::key_pressed(ctx, KeyCode::W) {
+        if input::key_pressed(ctx, KeyCode::W) {
             self.camera_pos += forward * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::S) {
+        if input::key_pressed(ctx, KeyCode::S) {
             self.camera_pos -= forward * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::A) {
+        if input::key_pressed(ctx, KeyCode::A) {
             self.camera_pos -= right * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::D) {
+        if input::key_pressed(ctx, KeyCode::D) {
             self.camera_pos += right * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::X) {
+        if input::key_pressed(ctx, KeyCode::X) {
             self.camera_pos += up * CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::Z) {
+        if input::key_pressed(ctx, KeyCode::Z) {
             self.camera_pos -= up * CAMERA_MOVE_SPEED * dt;
         }
         // Rotation
-        self.camera_yaw += CAMERA_ROTATE_SPEED * mouse::mouse_delta(ctx).0;
+        self.camera_yaw += CAMERA_ROTATE_SPEED * input::mouse_delta(ctx).0;
         // if keyboard::key_pressed(ctx, KeyCode::Q) {
         //     self.camera_yaw -= CAMERA_ROTATE_SPEED * dt;
         // }
@@ -160,20 +156,20 @@ impl Raymarcher {
         // }
 
         // Light
-        if keyboard::key_pressed(ctx, KeyCode::Up) {
+        if input::key_pressed(ctx, KeyCode::Up) {
             self.light_pos.z += CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::Down) {
+        if input::key_pressed(ctx, KeyCode::Down) {
             self.light_pos.z -= CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::Right) {
+        if input::key_pressed(ctx, KeyCode::Right) {
             self.light_pos.x += CAMERA_MOVE_SPEED * dt;
         }
-        if keyboard::key_pressed(ctx, KeyCode::Left) {
+        if input::key_pressed(ctx, KeyCode::Left) {
             self.light_pos.x -= CAMERA_MOVE_SPEED * dt;
         }
 
-        if keyboard::key_just_pressed(ctx, KeyCode::Space) {
+        if input::key_just_pressed(ctx, KeyCode::Space) {
             let path = "outputs/32.png";
             media::export_screenshot(ctx, path).unwrap();
             println!("exported screenshot to {}", path);
@@ -211,7 +207,7 @@ fn draw_single_threaded(
             }
             Antialiasing::AAx4 => draw_pixel_aax4(x, y, camera_pos, rot_mat, light_pos, &surfaces),
         };
-        canvas::write_pixel_f32(ctx, x, y, &color.to_array());
+        canvas::write_pixel_rgb_f32(ctx, x, y, &color.to_array());
     });
 }
 
@@ -222,8 +218,8 @@ fn draw_multi_threaded_chunkmut(
     rot_mat: Mat3,
     surfaces: SurfaceList,
 ) {
-    let pixels = canvas::pixel_ref(ctx);
-    pixels.par_chunks_mut(4).enumerate().for_each(|(i, rgba)| {
+    let pixels = canvas::pixels_ref(ctx);
+    pixels.rchunks_mut(4).enumerate().for_each(|(i, rgba)| {
         let (x, y) = (i as u32 % WIDTH, i as u32 / WIDTH);
         let color = match ANTI_ALIASING {
             Antialiasing::None => {
@@ -247,9 +243,9 @@ fn draw_custom_multi_line_chunkmut(
     surfaces: &SurfaceList,
 ) {
     // let size = 32;
-    let pixels = canvas::pixel_ref(ctx);
+    let pixels = canvas::pixels_ref(ctx);
     pixels
-        .par_chunks_mut(size as usize * 4)
+        .rchunks_mut(size as usize * 4)
         .enumerate()
         .for_each(|(i, line)| {
             for (j, rgba) in line.chunks_mut(4).enumerate() {
@@ -307,7 +303,7 @@ fn draw_pixel_aax4(
 fn get_screen_pos(x: u32, y: u32, offset: Vec2) -> Vec3 {
     vec3(
         x as f32 - WIDTH as f32 / 2.0 + offset.x,
-        -(y as f32 - HEIGHT as f32 / 2.0) + offset.y,
+        y as f32 - HEIGHT as f32 / 2.0 + offset.y,
         FOCAL_LENGTH,
     )
 }

@@ -16,5 +16,5 @@ fn main() {
     let light_pos = vec3(-15.0, 20.0, -30.0);
     let camera_pos = vec3(-8.0, 0.0, -15.0);
     let app = Raymarcher::new(surfaces, camera_pos, light_pos);
-    pixel_renderer::app::run(app)
+    pixelated::run(app)
 }

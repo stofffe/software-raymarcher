@@ -632,16 +632,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gif"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80792593675e051cf94a4b111980da2ba60d4a83e43e0048c5693baab3977045"
-dependencies = [
- "color_quant",
- "weezl",
-]
-
-[[package]]
 name = "gimli"
 version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1261,12 +1251,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
 
 [[package]]
-name = "pixel_renderer"
+name = "pixelated"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc465119e6e522e47ce8ba9c51416544af5e5eea17d17cc130b39a3008bfdc39"
 dependencies = [
  "bytemuck",
  "env_logger",
- "gif",
  "image",
  "log",
  "pollster 0.2.5",
@@ -1423,7 +1414,7 @@ dependencies = [
  "glam",
  "image",
  "noise",
- "pixel_renderer",
+ "pixelated",
  "pollster 0.3.0",
  "rayon",
  "tokio",
@@ -1974,12 +1965,6 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "weezl"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
 
 [[package]]
 name = "wgpu"
