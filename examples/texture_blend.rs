@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use glam::vec3;
-use raymarching::{
+use software_raymarcher::{
     materials::Textured,
     raymarcher::Raymarcher,
     surfaces::{plane, smooth_union, sphere, translation, SurfaceList},

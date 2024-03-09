@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, sync::Arc};
 
 use glam::{vec3, Quat};
-use raymarching::{
+use software_raymarcher::{
     materials::{Unlit, RED},
     raymarcher::Raymarcher,
     surfaces::{exact_box, rotation, scale, translation, translation_rotation_scale, SurfaceList},
